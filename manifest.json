@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Salesforce Package Generator",
+  "version": "1.0.0",
+  "description": "Generate deployment packages for Salesforce with ease",
+  "permissions": [
+    "tabs",
+    "cookies",
+    "storage",
+    "activeTab",
+    "scripting",
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://*.visual.force.com/*"
+  ],
+  "host_permissions": [
+    "https://*.salesforce.com/*",
+    "https://*.force.com/*",
+    "https://login.salesforce.com/*",
+    "https://test.salesforce.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_icon": {
+      "16": "assets/icon16.jpg",
+      "48": "assets/icon16.jpg",
+      "128": "assets/icon16.jpg"
+    },
+    "default_title": "Open Salesforce Package Generator"
+  },
+  "icons": {
+    "16": "assets/icon16.jpg",
+    "48": "assets/icon16.jpg",
+    "128": "assets/icon16.jpg"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.force.com/*"
+      ],
+      "js": [
+        "content/content-script.js"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}
