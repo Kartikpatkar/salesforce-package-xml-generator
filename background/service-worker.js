@@ -153,6 +153,18 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       })();
       return true; // Keep channel open for async response
 
+    case 'GET_AVAILABLE_API_VERSIONS':
+      (async () => {
+        const result = await fetchAvailableApiVersions();
+        chrome.runtime.sendMessage({
+          type: 'GET_AVAILABLE_API_VERSIONS_RESPONSE',
+          ...result
+        }).catch(err => {
+          // Ignore errors - popup may be closed
+          console.log('Could not send API versions response:', err.message);
+        });
+      })();
+      return true; // Keep channel open for async response
 
     case 'GENERATE_PACKAGE':
       try {
@@ -230,6 +242,57 @@ async function fetchMembersViaToolingAPI(metadataType) {
   }
 }
 
+
+// Fetch all available API versions from the org via REST
+async function fetchAvailableApiVersions() {
+  try {
+    const org = await SalesforceAuth.getCurrentOrg();
+    if (!org?.isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Check cache first (valid for 1 hour)
+    const storage = await chrome.storage.local.get(['apiVersionsCache', 'apiVersionsCacheTime']);
+    const now = Date.now();
+    const cacheAge = now - (storage.apiVersionsCacheTime || 0);
+    const CACHE_TTL = 3600000; // 1 hour
+
+    // Only use cache if it has versions AND is not expired
+    if (storage.apiVersionsCache?.length > 0 && cacheAge < CACHE_TTL) {
+      console.log('Using cached API versions:', storage.apiVersionsCache.length);
+      return { success: true, versions: storage.apiVersionsCache };
+    }
+
+    // Fetch from /services/data endpoint
+    const res = await fetch(`${org.instanceUrl}/services/data`, {
+      headers: { Authorization: `Bearer ${org.sessionId}` }
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    // Response is an array of version objects: [{ version: "56.0", url: "..." }, ...]
+    const versions = (data || [])
+      .map(v => v.version)
+      .filter(Boolean)
+      .sort((a, b) => parseFloat(b) - parseFloat(a)); // Descending order (newest first)
+
+    console.log('Fetched', versions.length, 'API versions from org');
+
+    // Cache the result
+    await chrome.storage.local.set({
+      apiVersionsCache: versions,
+      apiVersionsCacheTime: now
+    });
+
+    return { success: true, versions };
+  } catch (err) {
+    console.error('fetchAvailableApiVersions error', err);
+    return { success: false, error: err.message };
+  }
+}
 
 // Fetch all available metadata types from the org via Metadata API describe
 async function fetchAvailableMetadataTypes() {

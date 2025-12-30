@@ -110,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('[APP] Authenticated, showing UI');
                 showAuthenticatedUI(message.org);
                 fetchMetadataTypes(); // Fetch dynamic metadata types on successful auth
+                fetchApiVersions(); // Fetch dynamic API versions on successful auth
             } else {
                 const errorMsg = message.org?.error 
                     ? `Connection failed: ${message.org.error}` 
@@ -264,6 +265,59 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[APP] Using default metadata types');
             metadataTypes = getDefaultMetadataTypes();
             renderMetadataList();
+        }
+    }
+
+    async function fetchApiVersions() {
+        try {
+            console.log('[APP] Fetching available API versions from org...');
+            
+            return new Promise((resolve, reject) => {
+                // Set up listener for response
+                const listener = (message) => {
+                    if (message.type === 'GET_AVAILABLE_API_VERSIONS_RESPONSE') {
+                        chrome.runtime.onMessage.removeListener(listener);
+                        
+                        if (message.success && message.versions?.length > 0) {
+                            console.log('[APP] Loaded', message.versions.length, 'API versions from org');
+                            // Populate dropdown with fetched versions
+                            apiVersionSelect.innerHTML = '<option value="">-- Select API Version --</option>';
+                            message.versions.forEach(version => {
+                                const option = document.createElement('option');
+                                option.value = version;
+                                option.textContent = `${version} API`;
+                                apiVersionSelect.appendChild(option);
+                            });
+                            // Auto-select first (latest) version
+                            if (message.versions.length > 0) {
+                                apiVersionSelect.value = message.versions[0];
+                                chrome.storage.sync.set({ apiVersion: message.versions[0] });
+                            }
+                            resolve();
+                        } else {
+                            reject(new Error(message.error || 'Failed to fetch API versions'));
+                        }
+                    }
+                };
+                chrome.runtime.onMessage.addListener(listener);
+
+                // Send request to service worker
+                chrome.runtime.sendMessage({
+                    type: 'GET_AVAILABLE_API_VERSIONS'
+                }).catch(err => {
+                    chrome.runtime.onMessage.removeListener(listener);
+                    reject(err);
+                });
+
+                // Timeout after 5 seconds
+                setTimeout(() => {
+                    chrome.runtime.onMessage.removeListener(listener);
+                    reject(new Error('API versions fetch timeout'));
+                }, 5000);
+            });
+        } catch (err) {
+            console.warn('[APP] Could not fetch API versions:', err.message);
+            console.log('[APP] Using default API versions');
         }
     }
 
