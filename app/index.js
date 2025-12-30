@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (message.org?.isAuthenticated) {
                 console.log('[APP] Authenticated, showing UI');
                 showAuthenticatedUI(message.org);
+                fetchMetadataTypes(); // Fetch dynamic metadata types on successful auth
             } else {
                 const errorMsg = message.org?.error 
                     ? `Connection failed: ${message.org.error}` 
@@ -201,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.selectedMetadataTypes) {
             selectedTypes = new Set(data.selectedMetadataTypes);
         }
-        fetchMetadataTypes();
+        // Don't load anything yet; wait for auth and dynamic fetch
     });
 
     searchInput?.addEventListener('input', () => {
@@ -216,24 +217,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchMetadataTypes() {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            console.log('[APP] Fetching available metadata types from org...');
+            
+            // Show loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'metadata-loading';
+            loadingDiv.style.cssText = 'text-align: center; padding: 40px 20px; color: #666;';
+            loadingDiv.innerHTML = '<div style="margin-bottom: 10px; font-size: 14px;">⏳ Loading metadata types...</div><div style="font-size: 12px; color: #999;">Fetching list from your org</div>';
+            metadataList.innerHTML = '';
+            metadataList.appendChild(loadingDiv);
+            
+            return new Promise((resolve, reject) => {
+                // Set up listener for response before sending message
+                const listener = (message) => {
+                    if (message.type === 'GET_AVAILABLE_METADATA_TYPES_RESPONSE') {
+                        chrome.runtime.onMessage.removeListener(listener);
+                        
+                        if (message.success && message.types) {
+                            metadataTypes = message.types;
+                            console.log('[APP] Loaded', metadataTypes.length, 'metadata types from org');
+                            renderMetadataList();
+                            resolve();
+                        } else {
+                            reject(new Error(message.error || 'Failed to fetch metadata types'));
+                        }
+                    }
+                };
+                chrome.runtime.onMessage.addListener(listener);
 
-            if (tab?.url?.includes('salesforce')) {
-                const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_METADATA' });
-                metadataTypes = response?.metadata?.metadataTypes || getDefaultMetadataTypes();
-                userInfo.textContent = response?.metadata?.username
-                    ? `Connected as ${response.metadata.username}`
-                    : 'Connected to Salesforce';
-            } else {
-                metadataTypes = getDefaultMetadataTypes();
-                userInfo.textContent = 'Not on a Salesforce page';
-            }
-        } catch {
+                // Send request to service worker
+                chrome.runtime.sendMessage({
+                    type: 'GET_AVAILABLE_METADATA_TYPES'
+                }).catch(err => {
+                    chrome.runtime.onMessage.removeListener(listener);
+                    reject(err);
+                });
+
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    chrome.runtime.onMessage.removeListener(listener);
+                    reject(new Error('Metadata fetch timeout'));
+                }, 10000);
+            });
+        } catch (err) {
+            console.warn('[APP] Could not fetch dynamic metadata types:', err.message);
+            console.log('[APP] Using default metadata types');
             metadataTypes = getDefaultMetadataTypes();
-            userInfo.textContent = 'Using default metadata types';
+            renderMetadataList();
         }
-
-        renderMetadataList();
     }
 
     function getDefaultMetadataTypes() {

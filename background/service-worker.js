@@ -140,6 +140,19 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       })();
       break;
 
+    case 'GET_AVAILABLE_METADATA_TYPES':
+      (async () => {
+        const result = await fetchAvailableMetadataTypes();
+        chrome.runtime.sendMessage({
+          type: 'GET_AVAILABLE_METADATA_TYPES_RESPONSE',
+          ...result
+        }).catch(err => {
+          // Ignore errors - popup may be closed
+          console.log('Could not send metadata types response:', err.message);
+        });
+      })();
+      return true; // Keep channel open for async response
+
 
     case 'GENERATE_PACKAGE':
       try {
@@ -217,6 +230,105 @@ async function fetchMembersViaToolingAPI(metadataType) {
   }
 }
 
+
+// Fetch all available metadata types from the org via Metadata API describe
+async function fetchAvailableMetadataTypes() {
+  try {
+    const org = await SalesforceAuth.getCurrentOrg();
+    if (!org?.isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    // Check cache first (valid for 1 hour)
+    const storage = await chrome.storage.local.get(['metadataTypesCache', 'metadataTypesCacheTime']);
+    const now = Date.now();
+    const cacheAge = now - (storage.metadataTypesCacheTime || 0);
+    const CACHE_TTL = 3600000; // 1 hour
+
+    console.log('Cache check: types =', storage.metadataTypesCache?.length || 0, ', age (min) =', Math.round(cacheAge / 60000));
+
+    // Only use cache if it has types AND is not expired
+    if (storage.metadataTypesCache?.length > 0 && cacheAge < CACHE_TTL) {
+      console.log('Using cached metadata types:', storage.metadataTypesCache.length);
+      return { success: true, types: storage.metadataTypesCache };
+    }
+
+    // Clear stale/empty cache
+    if (storage.metadataTypesCacheTime) {
+      console.log('Cache expired or empty, fetching fresh');
+      await chrome.storage.local.set({ metadataTypesCache: [], metadataTypesCacheTime: 0 });
+    }
+
+    // Build SOAP body for describe
+    const body = `
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                              xmlns:met="http://soap.sforce.com/2006/04/metadata">
+              <soapenv:Header>
+                <met:SessionHeader>
+                  <met:sessionId>${org.sessionId}</met:sessionId>
+                </met:SessionHeader>
+              </soapenv:Header>
+              <soapenv:Body>
+                <met:describeMetadata>
+                  <met:asOfVersion>56.0</met:asOfVersion>
+                </met:describeMetadata>
+              </soapenv:Body>
+            </soapenv:Envelope>
+        `;
+
+    const res = await fetch(`${org.instanceUrl}/services/Soap/m/56.0`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml',
+        'SOAPAction': 'describeMetadata'
+      },
+      body
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('describeMetadata response:', res.status, text.slice(0, 500));
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+
+    const text = await res.text();
+
+    // Parse metadata type values from SOAP response using regex
+    // Format: <metadataObjects>...<xmlName>TypeName</xmlName>...</metadataObjects>
+    console.log('describeMetadata response length:', text.length);
+    console.log('describeMetadata response (first 1500 chars):', text.slice(0, 1500));
+    
+    const typeRegex = /<xmlName>([^<]+)<\/xmlName>/g;
+    const types = [];
+    let match;
+    while ((match = typeRegex.exec(text)) !== null) {
+      const typeName = match[1].trim();
+      // Skip non-metadata types (XML wrapper elements, etc)
+      if (typeName && !typeName.includes('Envelope') && !typeName.includes('Body') && !typeName.includes('Response') && !types.includes(typeName)) {
+        types.push(typeName);
+      }
+    }
+    types.sort();
+    console.log('Parsed metadata types from SOAP response:', types.length, 'types:', types.slice(0, 10));
+    
+    if (types.length === 0) {
+      console.warn('No metadata types found in response; clearing cache to allow retry');
+      await chrome.storage.local.set({ metadataTypesCache: [], metadataTypesCacheTime: 0 });
+    }
+    
+    // Cache the result
+    await chrome.storage.local.set({
+      metadataTypesCache: types,
+      metadataTypesCacheTime: now
+    });
+
+    console.log('Fetched', types.length, 'metadata types from org');
+    return { success: true, types };
+  } catch (err) {
+    console.error('fetchAvailableMetadataTypes error', err);
+    return { success: false, error: err.message };
+  }
+}
 
 // Helper: call Metadata API listMetadata (SOAP) and return array of fullNames
 async function fetchMetadataMembersViaMetadataAPI(metadataType) {
