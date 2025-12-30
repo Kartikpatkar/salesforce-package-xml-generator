@@ -28,7 +28,7 @@ A Chrome extension that helps Salesforce developers generate `package.xml` files
 4. Click "Load unpacked" and select the extension directory
 5. The extension icon should appear in your Chrome toolbar
 
-## Usage
+## Usage ##
 
 ### Connecting to Salesforce
 
