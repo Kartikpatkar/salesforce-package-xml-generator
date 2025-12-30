@@ -15,6 +15,11 @@ async function checkAuthAndNotify() {
     chrome.runtime.sendMessage({
       type: 'AUTH_STATE_CHANGED',
       org
+    }).catch(err => {
+      // Ignore "Receiving end does not exist" error - popup may be closed
+      if (!err.message.includes('Receiving end')) {
+        console.error('Send message error:', err);
+      }
     });
   } catch (error) {
     console.error('Auth check failed:', error);
@@ -22,7 +27,7 @@ async function checkAuthAndNotify() {
     chrome.runtime.sendMessage({
       type: 'AUTH_STATE_CHANGED',
       org: { isAuthenticated: false }
-    });
+    }).catch(() => {});
   }
 }
 
@@ -48,6 +53,9 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Handle extension icon click
 chrome.action.onClicked.addListener((tab) => {
+  // Store which tab the user was on when they clicked the extension
+  chrome.storage.local.set({ openerTabId: tab.id });
+  
   chrome.tabs.create({
     url: chrome.runtime.getURL('app/index.html')
   });
@@ -84,7 +92,28 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
   switch (message.type) {
     case 'LOGIN':
-      SalesforceAuth.login();
+      (async () => {
+        try {
+          console.log('Starting login flow, sandbox:', message.useSandbox);
+          const org = await SalesforceAuth.login(message.useSandbox);
+          console.log('Login successful:', org);
+          
+          // Store the org info
+          await chrome.storage.local.set({ currentOrg: org });
+          
+          // Notify all extension views
+          chrome.runtime.sendMessage({ 
+            type: 'AUTH_STATE_CHANGED', 
+            org 
+          }).catch(() => {});
+        } catch (err) {
+          console.error('Login failed:', err);
+          chrome.runtime.sendMessage({ 
+            type: 'AUTH_STATE_CHANGED', 
+            org: { isAuthenticated: false, error: err.message } 
+          }).catch(() => {});
+        }
+      })();
       break;
 
     case 'CHECK_AUTH':

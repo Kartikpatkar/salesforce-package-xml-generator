@@ -1,52 +1,226 @@
-// utils/auth.js - v3 - Added confirm function check
+// utils/auth.js - Cookie-based authentication for any Salesforce org
 class SalesforceAuth {
     static async getCurrentOrg() {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab || !tab.url) {
-                return { isAuthenticated: false };
+            // Check if there's a stored opener tab (the tab user was on before clicking extension)
+            const storage = await chrome.storage.local.get(['openerTabId']);
+            const openerTabId = storage.openerTabId;
+            
+            if (openerTabId) {
+                console.log('Checking opener tab ID:', openerTabId);
+                try {
+                    const openerTab = await chrome.tabs.get(openerTabId);
+                    if (openerTab && openerTab.url && (
+                        openerTab.url.includes('salesforce.com') ||
+                        openerTab.url.includes('force.com') ||
+                        openerTab.url.includes('visual.force.com')
+                    )) {
+                        const openerHost = new URL(openerTab.url).hostname;
+                        if (this._isLoginOrTestHost(openerHost)) {
+                            console.log('Skipping login/test opener tab:', openerHost);
+                        } else {
+                            console.log('Opener tab is Salesforce:', openerTab.url);
+                            const result = await this._checkTabForSession(openerTab);
+                            if (result.isAuthenticated) {
+                                console.log('Found session in opener tab:', result.instanceUrl);
+                                return result;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('Opener tab no longer exists:', e.message);
+                }
             }
-
-            // Check for Salesforce domains
-            const isSalesforceDomain = tab.url.includes('salesforce.com') ||
-                tab.url.includes('force.com') ||
-                tab.url.includes('visual.force.com');
-
-            if (!isSalesforceDomain) {
-                return { isAuthenticated: false };
-            }
-
-            const url = new URL(tab.url);
-            // Handle sandbox orgs
-            const isSandbox = url.hostname.includes('test.salesforce.com') ||
-                (url.hostname.includes('salesforce.com') &&
-                    !url.hostname.includes('login'));
-
-            // For content pages, we can check for the presence of the session cookie
-            const domain = isSandbox ? '.salesforce.com' : url.hostname;
-            const cookies = await chrome.cookies.getAll({ domain });
-
-            // Look for any session cookie
-            const sessionCookie = cookies.find(c =>
-                c.name.startsWith('sid') ||
-                c.name === 'sid' ||
-                c.name.endsWith('sid') ||
-                c.name.includes('sid=')
-            );
-
-            if (sessionCookie) {
-                return {
-                    isAuthenticated: true,
-                    instanceUrl: `${url.protocol}//${url.host}`,
-                    sessionId: sessionCookie.value,
-                    isSandbox
-                };
-            }
-
+            
+            // If we reached here, opener tab did not yield an authenticated session.
+            console.log('No authenticated org found in opener tab; skipping scan of other tabs by request');
             return { isAuthenticated: false };
         } catch (error) {
             console.error('Error detecting current org:', error);
             return { isAuthenticated: false, error: error.message };
+        }
+    }
+
+    static async _ensureContentScript(tabId) {
+        try {
+            await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+            return true;
+        } catch (err) {
+            if (err?.message?.includes('Receiving end')) {
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId },
+                        files: ['content/content-script.js']
+                    });
+                    return true;
+                } catch (injectErr) {
+                    console.log('Failed to inject content script:', injectErr.message);
+                    return false;
+                }
+            }
+            return false;
+        }
+    }
+
+    static _isLoginOrTestHost(hostname = '') {
+        return hostname === 'login.salesforce.com' ||
+               hostname === 'test.salesforce.com' ||
+               hostname.startsWith('login.') ||
+               hostname.startsWith('test.');
+    }
+
+    static _scoreSessionCookie(name = '') {
+        if (name === 'sid') return 3;            // canonical session cookie
+        if (name.startsWith('sid_')) return 2;   // other sid variants
+        if (name.includes('sid')) return 1;      // fallbacks like sid_Client
+        if (name.endsWith('_sid')) return 1;     // trailing sid patterns
+        return 0;
+    }
+
+    static _getApiBaseFromHostname(hostname, protocol = 'https:') {
+        if (!hostname) return null;
+        if (hostname.endsWith('.lightning.force.com')) {
+            return `${protocol}//${hostname.replace('.lightning.force.com', '.my.salesforce.com')}`;
+        }
+        return `${protocol}//${hostname}`;
+    }
+
+    static async _validateSessionViaApi(apiBase, sessionId) {
+        if (!apiBase || !sessionId) {
+            return { success: false, error: 'Missing apiBase or sessionId' };
+        }
+
+        const url = `${apiBase}/services/data/v56.0/limits`;
+        try {
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${sessionId}` },
+                cache: 'no-cache'
+            });
+
+            if (!res.ok) {
+                let bodyPreview = '';
+                try {
+                    bodyPreview = await res.text();
+                    bodyPreview = bodyPreview.slice(0, 200);
+                } catch (e) {
+                    bodyPreview = '(unreadable body)';
+                }
+                return { success: false, status: res.status, statusText: res.statusText, bodyPreview };
+            }
+
+            const contentType = res.headers.get('content-type') || '';
+            if (!contentType.includes('json')) {
+                return { success: false, contentType };
+            }
+
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    }
+
+    static async _checkTabForSession(tab) {
+        try {
+            const url = new URL(tab.url);
+            const hostname = url.hostname;
+            
+            console.log('Checking tab:', hostname);
+
+            // Skip generic login hosts; we only want actual org hosts
+            if (this._isLoginOrTestHost(hostname)) {
+                console.log('Skipping login/test host:', hostname);
+                return { isAuthenticated: false };
+            }
+            
+            // Try multiple domain variations for cookie lookup
+            const domainsToCheck = [
+                hostname,
+                '.' + hostname,
+                '.salesforce.com',
+                '.my.salesforce.com',
+                '.force.com'
+            ];
+            
+            const candidateCookies = [];
+            
+            // Try each domain pattern
+            for (const domain of domainsToCheck) {
+                try {
+                    const cookies = await chrome.cookies.getAll({ domain });
+                    console.log('Cookies for', domain, ':', cookies.length);
+
+                    cookies.forEach(c => {
+                        const score = this._scoreSessionCookie(c.name);
+                        if (score > 0) {
+                            candidateCookies.push({ cookie: c, score });
+                        }
+                    });
+                } catch (e) {
+                    // Continue to next domain
+                }
+            }
+
+            if (candidateCookies.length > 0) {
+                candidateCookies.sort((a, b) => b.score - a.score);
+
+                const validationFailures = [];
+                const seenValues = new Set();
+
+                for (const { cookie } of candidateCookies) {
+                    if (seenValues.has(cookie.value)) {
+                        continue; // skip duplicate sid values to avoid noisy retries
+                    }
+                    seenValues.add(cookie.value);
+
+                    console.log('Selected session cookie:', cookie.name);
+
+                    // Determine if sandbox
+                    const isSandbox = hostname.includes('.sandbox.') ||
+                                    hostname.includes('--') ||
+                                    hostname.includes('.develop.') ||
+                                    hostname.includes('.scratch.');
+                    
+                    const apiBase = this._getApiBaseFromHostname(hostname, url.protocol);
+
+                    // Validate session directly via API using sessionId
+                    const validation = await this._validateSessionViaApi(apiBase, cookie.value);
+                    if (validation?.success) {
+                        // Augment with org info if available via content script
+                        let orgInfo = {};
+                        try {
+                            const injected = await this._ensureContentScript(tab.id);
+                            if (injected) {
+                                const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_ORG_INFO' });
+                                orgInfo = response || {};
+                            }
+                        } catch (e) {
+                            console.log('Could not get org info from tab');
+                        }
+
+                        return {
+                            isAuthenticated: true,
+                            instanceUrl: apiBase,
+                            sessionId: cookie.value,
+                            isSandbox,
+                            orgId: orgInfo.orgId,
+                            userId: orgInfo.userId,
+                            username: orgInfo.username,
+                            tabId: tab.id
+                        };
+                    }
+
+                    console.warn('Session validation failed (API)', validation ? JSON.stringify(validation) : 'no response');
+                    validationFailures.push({ cookie: cookie.name, validation });
+                }
+
+                // All candidates failed
+                return { isAuthenticated: false, validationFailure: validationFailures };
+            }
+            
+            return { isAuthenticated: false };
+        } catch (err) {
+            console.log('Error checking tab:', err);
+            return { isAuthenticated: false };
         }
     }
 

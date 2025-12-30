@@ -23,8 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const rawUrl = org?.instanceUrl || org?.orgUrl;
         if (rawUrl) {
             try {
-                label = `Connected to ${new URL(rawUrl).hostname}`;
+                const hostname = new URL(rawUrl).hostname;
+                const orgType = org.isSandbox ? ' (Sandbox)' : ' (Production)';
+                label = `Connected to ${hostname}${orgType}`;
             } catch (_) { }
+        }
+
+        // Show username if available
+        if (org.username) {
+            label += ` • ${org.username}`;
         }
 
         statusDiv.textContent = label;
@@ -44,6 +51,18 @@ document.addEventListener('DOMContentLoaded', () => {
         contentDiv.style.display = 'none';
     }
 
+    function showLoadingUI(message = 'Connecting...') {
+        statusDiv.textContent = message;
+        statusDiv.className = 'auth-status loading';
+        authButton.disabled = true;
+        loginButton.disabled = true;
+    }
+
+    function hideLoadingUI() {
+        authButton.disabled = false;
+        loginButton.disabled = false;
+    }
+
     function showError(message) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'error-message';
@@ -57,7 +76,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // AUTH FLOW
     // -------------------------
     function requestAuthCheck() {
+        console.log('[APP] Requesting auth check...');
+        showLoadingUI('Detecting Salesforce org...');
         chrome.runtime.sendMessage({ type: 'CHECK_AUTH' });
+        
+        // Hide loading after 5 seconds if no response
+        setTimeout(() => {
+            if (statusDiv.className === 'auth-status loading') {
+                console.log('[APP] Auth check timeout');
+                hideLoadingUI();
+                showUnauthenticatedUI('Could not detect org - please login manually');
+            }
+        }, 5000);
     }
 
     chrome.runtime.onMessage.addListener((message) => {
@@ -72,11 +102,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     chrome.runtime.onMessage.addListener((message) => {
-        if (message.type === 'AUTH_STATE_CHANGED') {
+        if (message.type == 'AUTH_STATE_CHANGED') {
+            console.log('[APP] Received AUTH_STATE_CHANGED:', message.org);
+            hideLoadingUI();
+            
             if (message.org?.isAuthenticated) {
+                console.log('[APP] Authenticated, showing UI');
                 showAuthenticatedUI(message.org);
             } else {
-                showUnauthenticatedUI();
+                const errorMsg = message.org?.error 
+                    ? `Connection failed: ${message.org.error}` 
+                    : 'Not connected to a Salesforce org';
+                console.log('[APP] Not authenticated:', errorMsg);
+                showUnauthenticatedUI(errorMsg);
+                
+                if (message.org?.error) {
+                    showError(message.org.error);
+                }
             }
         }
         if (message.type === 'GET_METADATA_MEMBERS_RESPONSE') {
@@ -132,10 +174,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function login(useSandbox) {
             modal.remove();
+            showLoadingUI(`Logging into ${useSandbox ? 'Sandbox' : 'Production'}...`);
             chrome.runtime.sendMessage({
                 type: 'LOGIN',
                 useSandbox
             });
+            
+            // Hide loading after 30 seconds if no response
+            setTimeout(() => {
+                if (statusDiv.className === 'auth-status loading') {
+                    hideLoadingUI();
+                    showUnauthenticatedUI('Login timeout - please try again');
+                }
+            }, 30000);
         }
     }
 
