@@ -28,16 +28,16 @@
   },
   "action": {
     "default_icon": {
-      "16": "assets/icon16.jpg",
-      "48": "assets/icon16.jpg",
-      "128": "assets/icon16.jpg"
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon16.png",
+      "128": "assets/icons/icon16.png"
     },
     "default_title": "Open Salesforce Package Generator"
   },
   "icons": {
-    "16": "assets/icon16.jpg",
-    "48": "assets/icon16.jpg",
-    "128": "assets/icon16.jpg"
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon16.png",
+    "128": "assets/icons/icon16.png"
   },
   "content_scripts": [
     {

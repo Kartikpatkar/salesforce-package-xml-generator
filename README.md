@@ -144,12 +144,13 @@ Salesforce Package XML Generator is designed with:
 
 ## 📸 Screenshots
 
-> *(Add screenshots here — recommended sections)*
+### 🔷 Light Mode
 
-* Org connection status
-* Metadata type explorer
-* Metadata component list
-* Package XML preview
+![Light Mode - Editor Page](./assets/screenshots/Salesforce%20Package%20XML%20Generator%20(Light%20Theme).png)
+
+### 🌑 Dark Mode
+
+![Dark Mode - Editor Page](./assets/screenshots/Salesforce%20Package%20XML%20Generator%20(Dark%20Theme).png)
 
 ---
 
