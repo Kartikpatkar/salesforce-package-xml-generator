@@ -98,10 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 showError(message.error || 'Failed to generate package.xml');
             }
         }
-    });
-
-
-    chrome.runtime.onMessage.addListener((message) => {
         if (message.type == 'AUTH_STATE_CHANGED') {
             console.log('[APP] Received AUTH_STATE_CHANGED:', message.org);
             hideLoadingUI();
@@ -121,32 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (message.org?.error) {
                     showError(message.org.error);
                 }
-            }
-        }
-        if (message.type === 'GET_METADATA_MEMBERS_RESPONSE') {
-            // message contains: { success, members, error }
-            // find current title / membersList and render (this mirrors direct call return)
-            const title = document.getElementById('membersTitle');
-            const membersList = document.getElementById('membersList');
-
-            if (!message.success) {
-                title.textContent = 'Error';
-                membersList.innerHTML = `<div class="member-item">Error: ${message.error}</div>`;
-                return;
-            }
-
-            const members = message.members || [];
-            title.textContent = `Results (${members.length})`;
-            membersList.innerHTML = '';
-            if (members.length === 0) {
-                membersList.innerHTML = '<div class="member-item">No components found</div>';
-            } else {
-                members.forEach(name => {
-                    const div = document.createElement('div');
-                    div.className = 'member-item';
-                    div.textContent = name;
-                    membersList.appendChild(div);
-                });
             }
         }
     });
@@ -197,11 +167,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------
     let metadataTypes = [];
     let selectedTypes = new Set();
+    let selectedMembers = new Map(); // Map of metadataType -> Set of member names
 
-    chrome.storage.sync.get(['apiVersion', 'selectedMetadataTypes'], (data) => {
+    chrome.storage.sync.get(['apiVersion', 'selectedMembers'], (data) => {
         if (data.apiVersion) apiVersionSelect.value = data.apiVersion;
-        if (data.selectedMetadataTypes) {
-            selectedTypes = new Set(data.selectedMetadataTypes);
+        if (data.selectedMembers && typeof data.selectedMembers === 'object') {
+            // Restore selectedMembers Map from storage (stored as object)
+            Object.entries(data.selectedMembers).forEach(([type, members]) => {
+                selectedMembers.set(type, new Set(members));
+            });
         }
         // Don't load anything yet; wait for auth and dynamic fetch
     });
@@ -227,39 +201,18 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingDiv.innerHTML = '<div style="margin-bottom: 10px; font-size: 14px;">⏳ Loading metadata types...</div><div style="font-size: 12px; color: #999;">Fetching list from your org</div>';
             metadataList.innerHTML = '';
             metadataList.appendChild(loadingDiv);
-            
-            return new Promise((resolve, reject) => {
-                // Set up listener for response before sending message
-                const listener = (message) => {
-                    if (message.type === 'GET_AVAILABLE_METADATA_TYPES_RESPONSE') {
-                        chrome.runtime.onMessage.removeListener(listener);
-                        
-                        if (message.success && message.types) {
-                            metadataTypes = message.types;
-                            console.log('[APP] Loaded', metadataTypes.length, 'metadata types from org');
-                            renderMetadataList();
-                            resolve();
-                        } else {
-                            reject(new Error(message.error || 'Failed to fetch metadata types'));
-                        }
-                    }
-                };
-                chrome.runtime.onMessage.addListener(listener);
 
-                // Send request to service worker
-                chrome.runtime.sendMessage({
-                    type: 'GET_AVAILABLE_METADATA_TYPES'
-                }).catch(err => {
-                    chrome.runtime.onMessage.removeListener(listener);
-                    reject(err);
-                });
-
-                // Timeout after 10 seconds
-                setTimeout(() => {
-                    chrome.runtime.onMessage.removeListener(listener);
-                    reject(new Error('Metadata fetch timeout'));
-                }, 10000);
+            const response = await chrome.runtime.sendMessage({
+                type: 'GET_AVAILABLE_METADATA_TYPES'
             });
+
+            if (response?.success && response.types) {
+                metadataTypes = response.types;
+                console.log('[APP] Loaded', metadataTypes.length, 'metadata types from org');
+                renderMetadataList();
+            } else {
+                throw new Error(response?.error || 'Failed to fetch metadata types');
+            }
         } catch (err) {
             console.warn('[APP] Could not fetch dynamic metadata types:', err.message);
             console.log('[APP] Using default metadata types');
@@ -272,49 +225,29 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             console.log('[APP] Fetching available API versions from org...');
             
-            return new Promise((resolve, reject) => {
-                // Set up listener for response
-                const listener = (message) => {
-                    if (message.type === 'GET_AVAILABLE_API_VERSIONS_RESPONSE') {
-                        chrome.runtime.onMessage.removeListener(listener);
-                        
-                        if (message.success && message.versions?.length > 0) {
-                            console.log('[APP] Loaded', message.versions.length, 'API versions from org');
-                            // Populate dropdown with fetched versions
-                            apiVersionSelect.innerHTML = '<option value="">-- Select API Version --</option>';
-                            message.versions.forEach(version => {
-                                const option = document.createElement('option');
-                                option.value = version;
-                                option.textContent = `${version} API`;
-                                apiVersionSelect.appendChild(option);
-                            });
-                            // Auto-select first (latest) version
-                            if (message.versions.length > 0) {
-                                apiVersionSelect.value = message.versions[0];
-                                chrome.storage.sync.set({ apiVersion: message.versions[0] });
-                            }
-                            resolve();
-                        } else {
-                            reject(new Error(message.error || 'Failed to fetch API versions'));
-                        }
-                    }
-                };
-                chrome.runtime.onMessage.addListener(listener);
-
-                // Send request to service worker
-                chrome.runtime.sendMessage({
-                    type: 'GET_AVAILABLE_API_VERSIONS'
-                }).catch(err => {
-                    chrome.runtime.onMessage.removeListener(listener);
-                    reject(err);
-                });
-
-                // Timeout after 5 seconds
-                setTimeout(() => {
-                    chrome.runtime.onMessage.removeListener(listener);
-                    reject(new Error('API versions fetch timeout'));
-                }, 5000);
+            // Direct await response from service worker
+            const response = await chrome.runtime.sendMessage({
+                type: 'GET_AVAILABLE_API_VERSIONS'
             });
+            
+            if (response && response.success && response.versions?.length > 0) {
+                console.log('[APP] Loaded', response.versions.length, 'API versions from org');
+                // Populate dropdown with fetched versions
+                apiVersionSelect.innerHTML = '<option value="">-- Select API Version --</option>';
+                response.versions.forEach(version => {
+                    const option = document.createElement('option');
+                    option.value = version;
+                    option.textContent = `${version} API`;
+                    apiVersionSelect.appendChild(option);
+                });
+                // Auto-select first (latest) version
+                if (response.versions.length > 0) {
+                    apiVersionSelect.value = response.versions[0];
+                    chrome.storage.sync.set({ apiVersion: response.versions[0] });
+                }
+            } else {
+                throw new Error(response?.error || 'Failed to fetch API versions');
+            }
         } catch (err) {
             console.warn('[APP] Could not fetch API versions:', err.message);
             console.log('[APP] Using default API versions');
@@ -345,8 +278,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkbox.checked = selectedTypes.has(type);
                 checkbox.onchange = () => {
                     checkbox.checked ? selectedTypes.add(type) : selectedTypes.delete(type);
-                    chrome.storage.sync.set({ selectedMetadataTypes: [...selectedTypes] });
                     generateBtn.disabled = selectedTypes.size === 0;
+                    // Load components when checkbox is checked
+                    if (checkbox.checked) {
+                        loadMetadataMembers(type);
+                    } else {
+                        // Clear members display when unchecked
+                        const title = document.getElementById('membersTitle');
+                        const membersList = document.getElementById('membersList');
+                        title.textContent = 'Select a metadata type';
+                        membersList.innerHTML = '';
+                        // Clear selected members for this type from storage
+                        selectedMembers.delete(type);
+                        const membersForStorage = {};
+                        selectedMembers.forEach((set, t) => {
+                            membersForStorage[t] = [...set];
+                        });
+                        chrome.storage.sync.set({ selectedMembers: membersForStorage });
+                    }
                 };
 
                 // middle: label (clickable)
@@ -394,7 +343,46 @@ document.addEventListener('DOMContentLoaded', () => {
             members.forEach(name => {
                 const div = document.createElement('div');
                 div.className = 'member-item';
-                div.textContent = name;
+                
+                // Checkbox for component selection
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `member-${metadataType}-${name}`;
+                
+                // Check if this member was previously selected
+                if (selectedMembers.has(metadataType) && selectedMembers.get(metadataType).has(name)) {
+                    checkbox.checked = true;
+                }
+                
+                checkbox.onchange = () => {
+                    // Initialize set for this metadata type if not exists
+                    if (!selectedMembers.has(metadataType)) {
+                        selectedMembers.set(metadataType, new Set());
+                    }
+                    
+                    const memberSet = selectedMembers.get(metadataType);
+                    if (checkbox.checked) {
+                        memberSet.add(name);
+                    } else {
+                        memberSet.delete(name);
+                    }
+                    
+                    // Save to storage
+                    const membersForStorage = {};
+                    selectedMembers.forEach((set, type) => {
+                        membersForStorage[type] = [...set];
+                    });
+                    chrome.storage.sync.set({ selectedMembers: membersForStorage });
+                };
+                
+                // Label for component name
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = name;
+                label.style.marginLeft = '8px';
+                label.style.cursor = 'pointer';
+                
+                div.append(checkbox, label);
                 membersList.appendChild(div);
             });
 
@@ -406,23 +394,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function generatePackage() {
-        chrome.runtime.sendMessage({
-            type: 'GENERATE_PACKAGE',
-            data: {
-                metadataTypes: [...selectedTypes],
-                apiVersion: apiVersionSelect.value
-            }
-        });
-    }
-
-
-    async function generatePackage() {
         try {
+            // Convert selectedMembers Map to object for sending
+            const membersForPackage = {};
+            selectedMembers.forEach((set, type) => {
+                if (set.size > 0) {
+                    membersForPackage[type] = [...set];
+                }
+            });
+            
             const response = await chrome.runtime.sendMessage({
                 type: 'GENERATE_PACKAGE',
                 data: {
                     metadataTypes: [...selectedTypes],
-                    apiVersion: apiVersionSelect.value
+                    apiVersion: apiVersionSelect.value,
+                    members: membersForPackage
                 }
             });
 

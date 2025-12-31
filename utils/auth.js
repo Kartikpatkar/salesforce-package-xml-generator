@@ -1,7 +1,17 @@
 // utils/auth.js - Cookie-based authentication for any Salesforce org
 class SalesforceAuth {
+    // Short-lived cache to avoid revalidating the same session on every call
+    static _cache = { org: null, timestamp: 0 };
+    static _CACHE_TTL = 60000; // 60 seconds
+
     static async getCurrentOrg() {
         try {
+            // Return cached org if still fresh
+            const now = Date.now();
+            if (this._cache.org?.isAuthenticated && (now - this._cache.timestamp) < this._CACHE_TTL) {
+                return this._cache.org;
+            }
+
             // Check if there's a stored opener tab (the tab user was on before clicking extension)
             const storage = await chrome.storage.local.get(['openerTabId']);
             const openerTabId = storage.openerTabId;
@@ -23,6 +33,7 @@ class SalesforceAuth {
                             const result = await this._checkTabForSession(openerTab);
                             if (result.isAuthenticated) {
                                 console.log('Found session in opener tab:', result.instanceUrl);
+                                this._cache = { org: result, timestamp: Date.now() };
                                 return result;
                             }
                         }
@@ -34,6 +45,7 @@ class SalesforceAuth {
             
             // If we reached here, opener tab did not yield an authenticated session.
             console.log('No authenticated org found in opener tab; skipping scan of other tabs by request');
+            this._cache = { org: { isAuthenticated: false }, timestamp: Date.now() };
             return { isAuthenticated: false };
         } catch (error) {
             console.error('Error detecting current org:', error);
@@ -85,11 +97,28 @@ class SalesforceAuth {
         return `${protocol}//${hostname}`;
     }
 
-    static async _validateSessionViaApi(apiBase, sessionId) {
+    static async _validateSessionViaApi(apiBase, sessionId, tabId = null) {
         if (!apiBase || !sessionId) {
             return { success: false, error: 'Missing apiBase or sessionId' };
         }
 
+        // If we have a tabId, try validating via content script first (uses page's cookies)
+        if (tabId) {
+            try {
+                const response = await chrome.tabs.sendMessage(tabId, { 
+                    type: 'VALIDATE_SESSION',
+                    apiBase,
+                    sessionId
+                });
+                if (response?.success) {
+                    return { success: true };
+                }
+            } catch (e) {
+                console.log('Content script validation failed, trying API directly:', e.message);
+            }
+        }
+
+        // Fallback: try REST API with Bearer token
         const url = `${apiBase}/services/data/v56.0/limits`;
         try {
             const res = await fetch(url, {
@@ -182,8 +211,8 @@ class SalesforceAuth {
                     
                     const apiBase = this._getApiBaseFromHostname(hostname, url.protocol);
 
-                    // Validate session directly via API using sessionId
-                    const validation = await this._validateSessionViaApi(apiBase, cookie.value);
+                    // Validate session via content script first (prefers page's session)
+                    const validation = await this._validateSessionViaApi(apiBase, cookie.value, tab.id);
                     if (validation?.success) {
                         // Augment with org info if available via content script
                         let orgInfo = {};

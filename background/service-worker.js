@@ -1,7 +1,7 @@
 // background/service-worker.js
-// v5 - Simplified import
+// v8 - Added sendResponse parameter to listener - 2025-12-31
 import SalesforceAuth from '../utils/auth.js';
-console.log('Service worker registered');
+console.log('Service worker registered - v8 loaded');
 
 async function checkAuthAndNotify() {
   try {
@@ -62,7 +62,7 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 // Package generation function
-function generatePackageXml(metadataTypes = [], apiVersion = '56.0') {
+function generatePackageXml(metadataTypes = [], apiVersion = '56.0', members = {}) {
   if (!Array.isArray(metadataTypes) || metadataTypes.length === 0) {
     throw new Error('No metadata types selected');
   }
@@ -74,7 +74,18 @@ function generatePackageXml(metadataTypes = [], apiVersion = '56.0') {
   metadataTypes.sort().forEach(type => {
     if (typeof type === 'string' && type.trim() !== '') {
       packageXml += '    <types>\n';
-      packageXml += '        <members>*</members>\n';
+      
+      // If specific members are selected for this type, use them; otherwise use wildcard
+      if (members[type] && Array.isArray(members[type]) && members[type].length > 0) {
+        // Add specific selected members
+        members[type].forEach(member => {
+          packageXml += `        <members>${member}</members>\n`;
+        });
+      } else {
+        // Use wildcard if no specific members selected
+        packageXml += '        <members>*</members>\n';
+      }
+      
       packageXml += `        <name>${type.trim()}</name>\n`;
       packageXml += '    </types>\n';
     }
@@ -87,7 +98,7 @@ function generatePackageXml(metadataTypes = [], apiVersion = '56.0') {
 }
 
 // Message handler
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message.type);
 
   switch (message.type) {
@@ -125,52 +136,36 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       break;
 
     case 'GET_METADATA_MEMBERS':
-      (async () => {
-        let result;
-        if (isToolingType(message.metadataType)) {
-          result = await fetchMembersViaToolingAPI(message.metadataType);
-        } else {
-          result = await fetchMetadataMembersViaMetadataAPI(message.metadataType);
-        }
-
-        chrome.runtime.sendMessage({
-          type: 'GET_METADATA_MEMBERS_RESPONSE',
-          ...result
-        });
-      })();
-      break;
+      fetchMembersViaToolingAPI(message.metadataType).then(result => {
+        sendResponse(result);
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
+      return true; // Keep channel open for async response
 
     case 'GET_AVAILABLE_METADATA_TYPES':
-      (async () => {
-        const result = await fetchAvailableMetadataTypes();
-        chrome.runtime.sendMessage({
-          type: 'GET_AVAILABLE_METADATA_TYPES_RESPONSE',
-          ...result
-        }).catch(err => {
-          // Ignore errors - popup may be closed
-          console.log('Could not send metadata types response:', err.message);
-        });
-      })();
+      fetchAvailableMetadataTypes().then(result => {
+        console.log('[SW] GET_AVAILABLE_METADATA_TYPES result - success:', result.success, 'types:', result.types?.length);
+        sendResponse(result);
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
       return true; // Keep channel open for async response
 
     case 'GET_AVAILABLE_API_VERSIONS':
-      (async () => {
-        const result = await fetchAvailableApiVersions();
-        chrome.runtime.sendMessage({
-          type: 'GET_AVAILABLE_API_VERSIONS_RESPONSE',
-          ...result
-        }).catch(err => {
-          // Ignore errors - popup may be closed
-          console.log('Could not send API versions response:', err.message);
-        });
-      })();
+      fetchAvailableApiVersions().then(result => {
+        console.log('[SW] GET_AVAILABLE_API_VERSIONS result - success:', result.success, 'versions:', result.versions?.length);
+        sendResponse(result);
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
+      });
       return true; // Keep channel open for async response
 
     case 'GENERATE_PACKAGE':
       try {
-        const { metadataTypes, apiVersion } = message.data;
+        const { metadataTypes, apiVersion, members } = message.data;
 
-        const packageXml = generatePackageXml(metadataTypes, apiVersion);
+        const packageXml = generatePackageXml(metadataTypes, apiVersion, members || {});
 
         chrome.runtime.sendMessage({
           type: 'GENERATE_PACKAGE_RESPONSE',
@@ -297,9 +292,24 @@ async function fetchAvailableApiVersions() {
 // Fetch all available metadata types from the org via Metadata API describe
 async function fetchAvailableMetadataTypes() {
   try {
+    console.log('[SW] fetchAvailableMetadataTypes called');
     const org = await SalesforceAuth.getCurrentOrg();
+    console.log('[SW] fetchAvailableMetadataTypes - org:', {
+      isAuthenticated: org?.isAuthenticated,
+      hasSessionId: !!org?.sessionId,
+      hasInstanceUrl: !!org?.instanceUrl,
+      sessionIdPreview: org?.sessionId ? org.sessionId.slice(0, 30) + '...' : 'missing',
+      instanceUrl: org?.instanceUrl
+    });
+    
     if (!org?.isAuthenticated) {
+      console.log('[SW] fetchAvailableMetadataTypes: not authenticated');
       return { success: false, error: 'Not authenticated' };
+    }
+    
+    if (!org?.sessionId || !org?.instanceUrl) {
+      console.error('[SW] fetchAvailableMetadataTypes: missing sessionId or instanceUrl');
+      return { success: false, error: 'Missing session info' };
     }
 
     // Check cache first (valid for 1 hour)
@@ -339,6 +349,7 @@ async function fetchAvailableMetadataTypes() {
             </soapenv:Envelope>
         `;
 
+    console.log('[SW] Calling describeMetadata SOAP endpoint:', org.instanceUrl + '/services/Soap/m/56.0');
     const res = await fetch(`${org.instanceUrl}/services/Soap/m/56.0`, {
       method: 'POST',
       headers: {
@@ -397,8 +408,21 @@ async function fetchAvailableMetadataTypes() {
 async function fetchMetadataMembersViaMetadataAPI(metadataType) {
   try {
     const org = await SalesforceAuth.getCurrentOrg();
+    console.log('[SW] fetchMetadataMembersViaMetadataAPI - org object:', {
+      isAuthenticated: org?.isAuthenticated,
+      hasSessionId: !!org?.sessionId,
+      hasInstanceUrl: !!org?.instanceUrl,
+      instanceUrl: org?.instanceUrl,
+      keys: Object.keys(org || {})
+    });
+    
     if (!org?.isAuthenticated) {
       return { success: false, error: 'Not authenticated' };
+    }
+    
+    if (!org?.sessionId || !org?.instanceUrl) {
+      console.error('[SW] Missing sessionId or instanceUrl:', { sessionId: org?.sessionId, instanceUrl: org?.instanceUrl });
+      return { success: false, error: 'Missing session info - please re-authenticate' };
     }
 
     // build SOAP body for listMetadata
@@ -421,6 +445,8 @@ async function fetchMetadataMembersViaMetadataAPI(metadataType) {
             </soapenv:Envelope>
         `;
 
+    console.log('[SW] Fetching metadata members for:', metadataType, 'from:', org.instanceUrl);
+    
     const res = await fetch(`${org.instanceUrl}/services/Soap/m/56.0`, {
       method: 'POST',
       headers: {
@@ -432,20 +458,31 @@ async function fetchMetadataMembersViaMetadataAPI(metadataType) {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      console.error('[SW] listMetadata HTTP error:', res.status, res.statusText);
+      console.error('[SW] listMetadata response text:', text.slice(0, 1000));
       throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`);
     }
 
     const text = await res.text();
 
-    // Very simple XML parsing to pull <fullName> values
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'text/xml');
-    const fullNameNodes = Array.from(xml.getElementsByTagName('fullName'));
-    const members = fullNameNodes.map(n => n.textContent).filter(Boolean);
+    // Parse XML response to extract fullName values using regex
+    // Format: <fullName>ComponentName</fullName>
+    const fullNameRegex = /<fullName>([^<]+)<\/fullName>/g;
+    const members = [];
+    let match;
+    while ((match = fullNameRegex.exec(text)) !== null) {
+      const name = match[1].trim();
+      if (name && !members.includes(name)) {
+        members.push(name);
+      }
+    }
 
+    console.log('[SW] Found', members.length, 'members for', metadataType);
+    console.log('[SW] Sample members:', members.slice(0, 5));
     return { success: true, members };
   } catch (err) {
-    console.error('fetchMetadataMembersViaMetadataAPI error', err);
+    console.error('[SW] fetchMetadataMembersViaMetadataAPI error:', err.message);
+    console.error('[SW] Full error:', err);
     return { success: false, error: err.message };
   }
 }
