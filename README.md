@@ -1,132 +1,251 @@
-# Salesforce Package Generator
+# 📦 Salesforce Package XML Generator – Metadata Explorer & Deployment Tool
 
-A Chrome extension that helps Salesforce developers generate `package.xml` files for metadata deployments.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](#)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green.svg?logo=google-chrome)](#)
+[![Salesforce](https://img.shields.io/badge/Salesforce-Metadata%20API-00A1E0.svg)](#)
 
-## Features
+> **Tagline**: *Explore Salesforce metadata and generate accurate `package.xml` files — visually, securely, and effortlessly.*
 
-- 🔐 **Automatic Org Detection** - Opens from any logged-in Salesforce org page
-- 🔑 **Manual Login** - Production and Sandbox login options  
-- 📦 **Smart Package Generation** - Select metadata types to include
-- 🎯 **Member Preview** - View individual components before generating
-- ⚡ **Fast & Reliable** - Cookie-based authentication works with all orgs
-- Select multiple metadata types with an intuitive interface
-- Search and filter metadata types
-- Choose different API versions
-- Generate and download `package.xml` files
-- Works with Salesforce orgs (both production and sandbox)
+---
 
-## Installation
+## ✨ Overview
 
-### From Chrome Web Store
-*(Coming soon)*
+**Salesforce Package XML Generator** is a modern, developer-focused **Chrome Extension** that helps you **browse Salesforce org metadata and generate deployment-ready `package.xml` files** without writing XML manually.
 
-### Manual Installation
+Built for Salesforce developers who frequently work with:
 
-1. Clone or download this repository
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" (toggle in the top-right corner)
-4. Click "Load unpacked" and select the extension directory
-5. The extension icon should appear in your Chrome toolbar
+* Metadata deployments
+* Partial deployments
+* CI/CD preparation
+* Sandbox → Production releases
+* Multi-org environments
 
-## Usage ##
+The extension focuses on **accuracy, speed, and clarity**, using **Salesforce Tooling API and Metadata API** directly — no scraping, no middleware.
 
-### Connecting to Salesforce
+---
 
-**Option 1: Auto-Detection (Recommended)**
-1. Login to your Salesforce org in Chrome
-2. Click the extension icon or open from the toolbar
-3. Click "Detect Current Org" 
-4. The extension will automatically find your active session
+## 🚀 Key Features
 
-**Option 2: Manual Login**
-1. Click the extension icon
-2. Click "Login to Salesforce"
-3. Choose Production or Sandbox
-4. Complete login in the new tab
-5. Extension closes the tab and connects automatically
+### 🔐 Salesforce Org Detection & Authentication
 
-### Generating package.xml
+* Automatically detects the **currently active Salesforce org**
+* Supports:
 
-1. Click the extension icon in your Chrome toolbar
-2. The extension will open in a new tab
-3. Once connected, browse available metadata types
-4. Check the boxes for types you want to include in your package
-5. Click on any type name to preview its members (optional)
-6. Choose the desired API version (default: 56.0)
-7. Click "Generate package.xml" to download the file
+  * Production
+  * Sandbox
+  * Developer Edition
+  * Scratch Orgs
+* Uses existing Salesforce browser session
+* No OAuth setup
+* No credentials stored
+* Real-time connection status indicator
 
-## How It Works
+---
 
-The extension uses **cookie-based authentication**:
-- Detects session cookies from any Salesforce tab
-- Works with Production, Sandbox, Scratch, and Developer orgs
-- Supports custom domains and My Domain
-- No Connected App or OAuth setup required
-- Session ID used only for Tooling/Metadata API calls
+### 🧩 Metadata Type Explorer
 
-## Troubleshooting
+* Displays a searchable list of Salesforce **metadata types**
+* Dynamically loads metadata types from the connected org
+* Intelligent fallback to default metadata list if API discovery fails
+* Commonly supported types include:
 
-**"Could not detect org"**
-- Make sure you're logged into Salesforce in Chrome
-- Try refreshing the Salesforce page
-- Use manual login instead
+  * ApexClass
+  * ApexTrigger
+  * ApexPage
+  * ApexComponent
+  * CustomObject
+  * CustomField
+  * Layout
+  * Profile
+  * PermissionSet
+  * Flow
+  * CustomMetadata
+  * CustomLabel
+  * Workflow
+  * ValidationRule
+  * RecordType
 
-**"Login timeout"**
-- Complete the login within 5 minutes
-- Check your network connection
-- Try again with manual login
+---
 
-**No metadata showing**
-- Ensure you have API access in your org
-- Check profile permissions
-- Refresh the extension
+### 📂 Metadata Component Viewer
 
-## Development
+* Click any metadata type to view **actual components present in the org**
+* Uses the **correct Salesforce API per metadata type**:
 
-### Prerequisites
+  * **Tooling API** for Apex metadata
+  * **Metadata API (`listMetadata`)** for configuration metadata
+* Displays real-time component count
+* Gracefully handles:
 
-- Node.js (v14 or later)
-- npm (v6 or later)
+  * Empty metadata
+  * Unsupported metadata types
+  * API errors
 
-### Setup
+---
 
-1. Clone the repository
-2. Install dependencies:
+### ☑️ Fine-Grained Selection
+
+* Select **individual metadata components**
+* “Select All” support per metadata type
+* Search within metadata components
+* Selections persist across sessions using Chrome Storage
+
+---
+
+### 📦 Smart `package.xml` Generator
+
+* Generates **valid Salesforce `package.xml`**
+* Supports:
+
+  * Full wildcard deployment (`<members>*</members>`)
+  * Partial deployments (specific components only)
+* Live **package.xml preview**
+* Automatically updates as selections change
+* Configurable Salesforce **API version**
+* One-click download
+* Copy-to-clipboard support
+
+---
+
+### 🎨 Clean & Developer-Friendly UI
+
+* Three-panel layout:
+
+  * Metadata Types
+  * Metadata Components
+  * Package XML Preview
+* Responsive design
+* Dark / Light mode support
+* Toast notifications for actions and errors
+* Designed for daily Salesforce development workflows
+
+---
+
+## 🧼 Clear & Reset
+
+* Clear all selections instantly
+* Reset metadata and preview state
+* Safely switch between Salesforce orgs
+
+---
+
+## 🖥️ UI Philosophy
+
+Salesforce Package XML Generator is designed with:
+
+* **Zero unnecessary complexity**
+* **Clear visual hierarchy**
+* **Fast navigation between metadata**
+* **Readable XML preview**
+* **Developer-first usability**
+
+---
+
+## 📸 Screenshots
+
+> *(Add screenshots here — recommended sections)*
+
+* Org connection status
+* Metadata type explorer
+* Metadata component list
+* Package XML preview
+
+---
+
+## 🛠 Built With
+
+* **HTML, CSS, JavaScript (Vanilla)**
+* Chrome Extensions API (**Manifest V3**)
+* Salesforce **Tooling API**
+* Salesforce **Metadata API**
+* Modular, message-driven architecture
+
+---
+
+## 📦 Installation
+
+### 🔧 Load Extension Manually (Developer Mode)
+
+1. **Clone or Download this Repository**
+
    ```bash
-   npm install
+   git clone https://github.com/Kartikpatkar/salesforce-package-xml-generator.git
    ```
 
-### Building the Extension
+2. **Open Chrome Extensions Page**
 
-To build the extension for production:
+   ```
+   chrome://extensions/
+   ```
 
-```bash
-npm run build
-```
+3. **Enable Developer Mode**
 
-The built files will be available in the `dist` directory.
+   * Toggle **Developer mode** (top-right)
 
-### Loading in Chrome
+4. **Click “Load unpacked”**
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked" and select the `dist` directory
+   * Select the project root folder (contains `manifest.json`)
 
-## Contributing
+5. **Done 🎉**
 
-Contributions are welcome! Please follow these steps:
+   * Open Salesforce and click the extension icon
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+> ✅ Works with existing Salesforce login
+> ✅ No external servers
+> ✅ No data stored outside the browser
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🧪 Current Capabilities
 
-## Acknowledgments
+✔ Salesforce org auto-detection
+✔ Metadata type discovery
+✔ Metadata component listing
+✔ Tooling API & Metadata API support
+✔ Partial & full `package.xml` generation
+✔ Live XML preview
+✔ Persistent selections
+✔ Dark / light themes
 
-- Built with ❤️ for Salesforce developers
-- Inspired by the need for a simple package.xml generator
+---
+
+## 🛣️ Roadmap (Planned Enhancements)
+
+* 📦 Metadata ZIP retrieve support
+* 🧨 `destructiveChanges.xml` generation
+* 👤 Profile & PermissionSet sub-component selection
+* 🔍 Metadata search across types
+* 🔄 Org-to-org metadata comparison
+* 💾 Saved package presets
+
+---
+
+## 🤝 Contributing
+
+Contributions, bug reports, and feature requests are welcome!
+
+* Fork the repository
+* Create a feature branch
+* Submit a pull request
+
+Please keep changes modular and follow the existing code structure.
+
+---
+
+## 🧠 Author
+
+Built by **Kartik Patkar**
+Salesforce Developer • Chrome Extension Builder
+
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License** — free to use, modify, and distribute.
+
+---
+
+> **Salesforce Package XML Generator** — because deployments should be precise, fast, and stress-free 🚀
+
+---
