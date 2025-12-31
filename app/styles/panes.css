@@ -1,0 +1,212 @@
+/* Panes, lists, and preview */
+.split-view {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+}
+
+.left-pane, .middle-pane, .right-pane {
+    background: white;
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    height: 78vh;
+}
+
+.left-pane h3, .middle-pane h3, .right-pane h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0 0 10px 0;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #667eea;
+}
+
+.preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #667eea;
+}
+
+.preview-header h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #667eea;
+}
+
+.pane-header h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.copy-button, .select-all-button {
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4a5568;
+    transition: all 0.2s;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.copy-button:hover, .select-all-button:hover {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.members-search-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 12px;
+    background: #f7fafc;
+    transition: all 0.2s;
+}
+
+.members-search-input:focus {
+    outline: none;
+    border-color: #764ba2;
+    background: white;
+}
+
+.metadata-list, .members-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.metadata-list::-webkit-scrollbar,
+.members-list::-webkit-scrollbar,
+.preview-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.metadata-list::-webkit-scrollbar-track,
+.members-list::-webkit-scrollbar-track,
+.preview-container::-webkit-scrollbar-track {
+    background: #f7fafc;
+    border-radius: 4px;
+}
+
+.metadata-list::-webkit-scrollbar-thumb,
+.members-list::-webkit-scrollbar-thumb,
+.preview-container::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+}
+
+.metadata-list::-webkit-scrollbar-thumb:hover,
+.members-list::-webkit-scrollbar-thumb:hover,
+.preview-container::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+.metadata-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s;
+    cursor: pointer;
+}
+
+.metadata-item:hover {
+    background: #f8fbff;
+}
+
+.metadata-item:last-child {
+    border-bottom: none;
+}
+
+.metadata-item input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.metadata-item span {
+    flex: 1;
+}
+
+.member-item {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+}
+
+.member-item:hover {
+    background: #f8fbff;
+}
+
+.member-item input[type="checkbox"] {
+    cursor: pointer;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.member-item label {
+    flex: 1;
+    cursor: pointer;
+    user-select: none;
+}
+
+.select-all-item {
+    font-weight: bold;
+    border-bottom: 2px solid #dee2e6 !important;
+    margin-bottom: 8px;
+}
+
+.preview-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    background: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.package-preview {
+    color: #2d3748;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}

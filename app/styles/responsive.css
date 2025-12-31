@@ -1,0 +1,60 @@
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .split-view {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .left-pane, .middle-pane, .right-pane {
+        min-height: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    .auth-section {
+        margin: 16px;
+        padding: 16px;
+    }
+
+    #content {
+        padding: 0 16px 16px;
+    }
+
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 16px;
+    }
+
+    .search-box {
+        min-width: 100%;
+    }
+
+    .api-version {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #apiVersion {
+        width: 100%;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .clear-all-btn, .generate-btn {
+        width: 100%;
+    }
+}

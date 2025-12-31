@@ -1,0 +1,147 @@
+/* Dark theme overrides */
+body.dark-theme {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+body.dark-theme .container {
+    background: #0f1419;
+}
+
+body.dark-theme header,
+body.dark-theme .auth-section,
+body.dark-theme .controls,
+body.dark-theme .left-pane,
+body.dark-theme .middle-pane,
+body.dark-theme .right-pane {
+    background: #1a1f2e;
+}
+
+body.dark-theme h1 {
+    background: linear-gradient(135deg, #8b9aee 0%, #9b7bc2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+body.dark-theme .left-pane h3,
+body.dark-theme .middle-pane h3,
+body.dark-theme .right-pane h3,
+body.dark-theme .api-version label {
+    color: #e1e4e8;
+}
+
+body.dark-theme #searchInput,
+body.dark-theme .members-search-input,
+body.dark-theme #apiVersion {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #e1e4e8;
+}
+
+body.dark-theme #searchInput:focus,
+body.dark-theme .members-search-input:focus,
+body.dark-theme #apiVersion:focus {
+    background: #161b22;
+    border-color: #8b9aee;
+}
+
+body.dark-theme .metadata-item,
+body.dark-theme .member-item {
+    border-bottom-color: #30363d;
+    color: #e1e4e8;
+}
+
+body.dark-theme .metadata-item:hover,
+body.dark-theme .member-item:hover {
+    background: #161b22;
+}
+
+body.dark-theme .preview-container {
+    background: #0d1117;
+    border-color: #30363d;
+}
+
+body.dark-theme .package-preview {
+    color: #7ee787;
+}
+
+body.dark-theme .theme-toggle,
+body.dark-theme .refresh-button {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #e1e4e8;
+}
+
+body.dark-theme .theme-toggle:hover,
+body.dark-theme .refresh-button:hover {
+    background: #8b9aee;
+    border-color: #8b9aee;
+    color: white;
+}
+
+body.dark-theme .preview-header {
+    border-bottom-color: #30363d;
+}
+
+body.dark-theme .preview-header h3 {
+    color: #e1e4e8;
+}
+
+body.dark-theme .pane-header {
+    border-bottom-color: #30363d;
+}
+
+body.dark-theme .pane-header h3 {
+    color: #e1e4e8;
+}
+
+body.dark-theme .copy-button,
+body.dark-theme .select-all-button {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #e1e4e8;
+}
+
+body.dark-theme .copy-button:hover,
+body.dark-theme .select-all-button:hover {
+    background: #8b9aee;
+    border-color: #8b9aee;
+    color: white;
+}
+
+body.dark-theme .auth-status {
+    color: #e1e4e8;
+}
+
+body.dark-theme .auth-status.connected {
+    background-color: #1a3a1a;
+    color: #7ee787;
+    border-color: #2d5f2d;
+}
+
+body.dark-theme .auth-status.disconnected {
+    background-color: #3a1a1a;
+    color: #f85149;
+    border-color: #5f2d2d;
+}
+
+body.dark-theme .auth-status.loading {
+    background-color: #3a3a1a;
+    color: #f0c808;
+    border-color: #5f5f2d;
+}
+
+body.dark-theme .clear-all-btn {
+    background: #161b22;
+    color: #e1e4e8;
+    border-color: #30363d;
+}
+
+body.dark-theme .clear-all-btn:hover {
+    background: #30363d;
+    color: #f0f0f0;
+}
+
+body.dark-theme .loading-overlay {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
