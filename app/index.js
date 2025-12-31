@@ -135,14 +135,14 @@ function showError(message) {
         showLoadingUI('Detecting Salesforce org...');
         chrome.runtime.sendMessage({ type: 'CHECK_AUTH' });
         
-        // Hide loading after 5 seconds if no response
+        // Increase timeout to 10 seconds and keep loading screen visible
         setTimeout(() => {
             if (statusDiv.className === 'auth-status loading') {
-                console.log('[APP] Auth check timeout');
-                hideLoadingUI();
-                showUnauthenticatedUI('Could not detect org - please login manually');
+                console.log('[APP] Auth check timeout - but keeping loading screen');
+                // Don't hide loading, just show a different message
+                showLoadingUI('Still detecting org...');
             }
-        }, 5000);
+        }, 10000);
     }
 
     chrome.runtime.onMessage.addListener((message) => {
@@ -629,5 +629,33 @@ function showError(message) {
     // -------------------------
     // INITIAL LOAD
     // -------------------------
-    requestAuthCheck();
+    // Find the most recent Salesforce tab and update opener tab ID
+    chrome.tabs.query({}, (allTabs) => {
+        // Filter for Salesforce tabs
+        const salesforceTabs = allTabs.filter(tab => 
+            tab.url && (
+                tab.url.includes('salesforce.com') ||
+                tab.url.includes('force.com') ||
+                tab.url.includes('visual.force.com')
+            ) && !tab.url.startsWith('chrome-extension://')
+        );
+        
+        if (salesforceTabs.length > 0) {
+            // Sort by last accessed time (most recent first)
+            salesforceTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            const mostRecentSfTab = salesforceTabs[0];
+            
+            chrome.storage.local.set({ openerTabId: mostRecentSfTab.id }, () => {
+                console.log('[APP] Updated opener tab ID to most recent Salesforce tab:', mostRecentSfTab.id, mostRecentSfTab.url);
+                // Clear the auth cache to force re-detection
+                chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_CACHE' }, () => {
+                    requestAuthCheck();
+                });
+            });
+        } else {
+            // No Salesforce tabs found, just do auth check
+            console.log('[APP] No Salesforce tabs found');
+            requestAuthCheck();
+        }
+    });
 });

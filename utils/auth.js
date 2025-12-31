@@ -4,6 +4,12 @@ class SalesforceAuth {
     static _cache = { org: null, timestamp: 0 };
     static _CACHE_TTL = 60000; // 60 seconds
 
+    // Clear the cache (useful when switching orgs)
+    static clearCache() {
+        this._cache = { org: null, timestamp: 0 };
+        console.log('Auth cache cleared');
+    }
+
     static async getCurrentOrg() {
         try {
             // Return cached org if still fresh

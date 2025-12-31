@@ -127,6 +127,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })();
       break;
 
+    case 'CLEAR_AUTH_CACHE':
+      SalesforceAuth.clearCache();
+      sendResponse({ success: true });
+      break;
+
     case 'CHECK_AUTH':
       checkAuthAndNotify();   // ✅ NOW EXISTS
       break;
