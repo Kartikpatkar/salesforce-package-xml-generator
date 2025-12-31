@@ -249,6 +249,16 @@ h1 {
     border-radius: 4px;
 }
 
+.members-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
 /* Metadata List */
 .metadata-list {
     max-height: 300px;
@@ -389,18 +399,46 @@ h1 {
 
 /* Left metadata column */
 .left-pane {
-  width: 40%;
-  min-width: 220px;
-  max-width: 45%;
+  width: 30%;
+  min-width: 200px;
   border-right: 1px solid #e6e6e6;
   padding-right: 8px;
 }
 
-/* Right members column */
-.right-pane {
-  width: 60%;
-  min-width: 280px;
+/* Middle members column */
+.middle-pane {
+  width: 35%;
+  min-width: 250px;
   padding-left: 12px;
+  padding-right: 8px;
+  border-right: 1px solid #e6e6e6;
+}
+
+/* Right preview column */
+.right-pane {
+  width: 35%;
+  min-width: 250px;
+  padding-left: 12px;
+}
+
+.preview-container {
+  position: relative;
+  height: calc(100% - 10px);
+}
+
+.package-preview {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 12px;
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 420px;
+  color: #212529;
+  white-space: pre;
 }
 
 /* members list */

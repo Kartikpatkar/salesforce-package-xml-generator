@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiVersionSelect = document.getElementById('apiVersion');
     const generateBtn = document.getElementById('generateBtn');
     const userInfo = document.getElementById('user-info');
+    const packagePreview = document.getElementById('packagePreview');
+    const membersSearchInput = document.getElementById('membersSearchInput');
 
     // -------------------------
     // UI STATE HELPERS
@@ -184,8 +186,22 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMetadataList(searchInput.value.toLowerCase());
     });
 
+    membersSearchInput?.addEventListener('input', () => {
+        const searchTerm = membersSearchInput.value.toLowerCase();
+        const memberItems = document.querySelectorAll('.member-item:not(.select-all-item)');
+        
+        memberItems.forEach(item => {
+            const label = item.querySelector('label');
+            if (label) {
+                const text = label.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            }
+        });
+    });
+
     apiVersionSelect?.addEventListener('change', () => {
         chrome.storage.sync.set({ apiVersion: apiVersionSelect.value });
+        updatePackagePreview();
     });
 
     generateBtn?.addEventListener('click', generatePackage);
@@ -296,6 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         chrome.storage.sync.set({ selectedMembers: membersForStorage });
                     }
+                    // Update preview when metadata type is toggled
+                    updatePackagePreview();
                 };
 
                 // middle: label (clickable)
@@ -310,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
         generateBtn.disabled = selectedTypes.size === 0;
+        updatePackagePreview();
     }
 
     async function loadMetadataMembers(metadataType) {
@@ -318,6 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         title.textContent = `Loading ${metadataType}...`;
         membersList.innerHTML = '';
+        membersSearchInput.style.display = 'none';
+        membersSearchInput.value = '';
 
         try {
             const response = await chrome.runtime.sendMessage({
@@ -340,6 +361,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Show search input
+            membersSearchInput.style.display = 'block';
+
+            // Add Select All checkbox
+            const selectAllDiv = document.createElement('div');
+            selectAllDiv.className = 'member-item select-all-item';
+            selectAllDiv.style.fontWeight = 'bold';
+            selectAllDiv.style.borderBottom = '2px solid #dee2e6';
+            selectAllDiv.style.marginBottom = '8px';
+            
+            const selectAllCheckbox = document.createElement('input');
+            selectAllCheckbox.type = 'checkbox';
+            selectAllCheckbox.id = `select-all-${metadataType}`;
+            
+            // Check if all members are already selected
+            const memberSet = selectedMembers.get(metadataType) || new Set();
+            selectAllCheckbox.checked = members.length > 0 && members.every(name => memberSet.has(name));
+            
+            selectAllCheckbox.onchange = () => {
+                const allCheckboxes = membersList.querySelectorAll('input[type="checkbox"]:not(#select-all-' + metadataType + ')');
+                
+                if (!selectedMembers.has(metadataType)) {
+                    selectedMembers.set(metadataType, new Set());
+                }
+                const set = selectedMembers.get(metadataType);
+                
+                allCheckboxes.forEach(cb => {
+                    cb.checked = selectAllCheckbox.checked;
+                    const memberName = cb.dataset.memberName;
+                    if (selectAllCheckbox.checked) {
+                        set.add(memberName);
+                    } else {
+                        set.delete(memberName);
+                    }
+                });
+                
+                // Save to storage
+                const membersForStorage = {};
+                selectedMembers.forEach((set, type) => {
+                    membersForStorage[type] = [...set];
+                });
+                chrome.storage.sync.set({ selectedMembers: membersForStorage });
+                
+                // Update preview
+                updatePackagePreview();
+            };
+            
+            const selectAllLabel = document.createElement('label');
+            selectAllLabel.htmlFor = selectAllCheckbox.id;
+            selectAllLabel.textContent = 'Select All';
+            selectAllLabel.style.marginLeft = '8px';
+            selectAllLabel.style.cursor = 'pointer';
+            
+            selectAllDiv.append(selectAllCheckbox, selectAllLabel);
+            membersList.appendChild(selectAllDiv);
+
             members.forEach(name => {
                 const div = document.createElement('div');
                 div.className = 'member-item';
@@ -348,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.id = `member-${metadataType}-${name}`;
+                checkbox.dataset.memberName = name; // Store member name for select all
                 
                 // Check if this member was previously selected
                 if (selectedMembers.has(metadataType) && selectedMembers.get(metadataType).has(name)) {
@@ -367,12 +445,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         memberSet.delete(name);
                     }
                     
+                    // Update select all checkbox state
+                    const selectAllCheckbox = document.getElementById(`select-all-${metadataType}`);
+                    if (selectAllCheckbox) {
+                        const allCheckboxes = membersList.querySelectorAll('input[type="checkbox"]:not(#select-all-' + metadataType + ')');
+                        const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
+                        selectAllCheckbox.checked = allChecked;
+                    }
+                    
                     // Save to storage
                     const membersForStorage = {};
                     selectedMembers.forEach((set, type) => {
                         membersForStorage[type] = [...set];
                     });
                     chrome.storage.sync.set({ selectedMembers: membersForStorage });
+                    
+                    // Update preview
+                    updatePackagePreview();
                 };
                 
                 // Label for component name
@@ -429,6 +518,40 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
 
         URL.revokeObjectURL(url);
+    }
+
+    function updatePackagePreview() {
+        const apiVersion = apiVersionSelect.value || '61.0';
+        let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+        xml += '<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+
+        if (selectedTypes.size === 0) {
+            xml += '    <!-- Select metadata types to see preview -->\n';
+        } else {
+            const sortedTypes = [...selectedTypes].sort();
+            
+            sortedTypes.forEach(type => {
+                xml += `    <types>\n`;
+                
+                // Check if we have specific members selected for this type
+                if (selectedMembers.has(type) && selectedMembers.get(type).size > 0) {
+                    const members = [...selectedMembers.get(type)].sort();
+                    members.forEach(member => {
+                        xml += `        <members>${member}</members>\n`;
+                    });
+                } else {
+                    xml += `        <members>*</members>\n`;
+                }
+                
+                xml += `        <name>${type}</name>\n`;
+                xml += `    </types>\n`;
+            });
+        }
+
+        xml += `    <version>${apiVersion}</version>\n`;
+        xml += '</Package>';
+
+        packagePreview.textContent = xml;
     }
 
     // -------------------------

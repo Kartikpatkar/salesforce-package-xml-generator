@@ -46,9 +46,21 @@
                     <div id="metadataList" class="metadata-list"></div>
                 </div>
 
-                <div class="right-pane">
+                <div class="middle-pane">
                     <h3 id="membersTitle">Select a metadata type</h3>
+                    <input type="text" id="membersSearchInput" class="members-search-input" placeholder="Search components..." style="display: none;">
                     <div id="membersList" class="members-list"></div>
+                </div>
+
+                <div class="right-pane">
+                    <h3>Package Preview</h3>
+                    <div class="preview-container">
+                        <pre id="packagePreview" class="package-preview">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;Package xmlns="http://soap.sforce.com/2006/04/metadata"&gt;
+    &lt;!-- Select metadata types to see preview --&gt;
+    &lt;version&gt;61.0&lt;/version&gt;
+&lt;/Package&gt;</pre>
+                    </div>
                 </div>
             </div>
 

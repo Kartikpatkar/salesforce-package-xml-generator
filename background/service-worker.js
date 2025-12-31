@@ -136,11 +136,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     case 'GET_METADATA_MEMBERS':
-      fetchMembersViaToolingAPI(message.metadataType).then(result => {
-        sendResponse(result);
-      }).catch(err => {
-        sendResponse({ success: false, error: err.message });
-      });
+      (async () => {
+        try {
+          let result;
+          if (isToolingType(message.metadataType)) {
+            result = await fetchMembersViaToolingAPI(message.metadataType);
+          } else {
+            result = await fetchMetadataMembersViaMetadataAPI(message.metadataType);
+          }
+          sendResponse(result);
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
       return true; // Keep channel open for async response
 
     case 'GET_AVAILABLE_METADATA_TYPES':
@@ -551,10 +559,19 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 function isToolingType(type) {
+  // Metadata types that work better with Tooling API
   return [
     'ApexClass',
     'ApexTrigger',
     'ApexComponent',
-    'ApexPage'
+    'ApexPage',
+    'LightningComponentBundle',
+    'AuraDefinitionBundle',
+    'FlowDefinition',
+    'Flow',
+    'StaticResource',
+    'EmailTemplate',
+    'Report',
+    'Dashboard'
   ].includes(type);
 }
