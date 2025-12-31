@@ -172,22 +172,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'GENERATE_PACKAGE':
       try {
         const { metadataTypes, apiVersion, members } = message.data;
-
         const packageXml = generatePackageXml(metadataTypes, apiVersion, members || {});
-
-        chrome.runtime.sendMessage({
-          type: 'GENERATE_PACKAGE_RESPONSE',
-          success: true,
-          packageXml
-        });
+        sendResponse({ success: true, packageXml });
       } catch (e) {
-        chrome.runtime.sendMessage({
-          type: 'GENERATE_PACKAGE_RESPONSE',
-          success: false,
-          error: e.message
-        });
+        sendResponse({ success: false, error: e.message });
       }
-      break;
+      return true; // Keep channel open for async response
 
     default:
       console.warn('Unknown message type:', message.type);

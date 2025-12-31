@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInfo = document.getElementById('user-info');
     const packagePreview = document.getElementById('packagePreview');
     const membersSearchInput = document.getElementById('membersSearchInput');
+    const clearAllBtn = document.getElementById('clearAllBtn');
 
     // -------------------------
     // UI STATE HELPERS
@@ -93,13 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     chrome.runtime.onMessage.addListener((message) => {
-        if (message.type === 'GENERATE_PACKAGE_RESPONSE') {
-            if (message.success) {
-                downloadFile('package.xml', message.packageXml);
-            } else {
-                showError(message.error || 'Failed to generate package.xml');
-            }
-        }
         if (message.type == 'AUTH_STATE_CHANGED') {
             console.log('[APP] Received AUTH_STATE_CHANGED:', message.org);
             hideLoadingUI();
@@ -205,6 +199,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     generateBtn?.addEventListener('click', generatePackage);
+    
+    clearAllBtn?.addEventListener('click', () => {
+        // Clear all selections
+        selectedTypes.clear();
+        selectedMembers.clear();
+        
+        // Clear storage
+        chrome.storage.sync.set({ selectedMembers: {} });
+        
+        // Uncheck all metadata type checkboxes
+        const metadataCheckboxes = metadataList.querySelectorAll('input[type="checkbox"]');
+        metadataCheckboxes.forEach(cb => cb.checked = false);
+        
+        // Clear members display
+        const title = document.getElementById('membersTitle');
+        const membersList = document.getElementById('membersList');
+        title.textContent = 'Select a metadata type';
+        membersList.innerHTML = '';
+        membersSearchInput.style.display = 'none';
+        membersSearchInput.value = '';
+        
+        // Update UI
+        generateBtn.disabled = true;
+        updatePackagePreview();
+    });
 
     async function fetchMetadataTypes() {
         try {

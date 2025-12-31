@@ -286,6 +286,11 @@ h1 {
 }
 
 /* Generate Button */
+.actions {
+    display: flex;
+    gap: 10px;
+}
+
 .generate-btn {
     background-color: #28a745;
     color: white;
@@ -294,8 +299,23 @@ h1 {
     border-radius: 4px;
     cursor: pointer;
     font-weight: 600;
-    width: 100%;
+    flex: 1;
     transition: background-color 0.2s;
+}
+
+.clear-all-btn {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.clear-all-btn:hover {
+    background-color: #c82333;
 }
 
 .generate-btn:hover {
