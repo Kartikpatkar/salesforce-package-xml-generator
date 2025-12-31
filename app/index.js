@@ -88,32 +88,44 @@ document.addEventListener('DOMContentLoaded', () => {
         authButton.textContent = 'Switch Org';
         loginButton.style.display = 'none';
         contentDiv.style.display = 'block';
+    
+    // Hide loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
     }
+}
 
-    function showUnauthenticatedUI(message = 'Not connected to a Salesforce org') {
-        statusDiv.textContent = message;
-        statusDiv.className = 'auth-status disconnected';
+function showUnauthenticatedUI(message = 'Not connected to a Salesforce org') {
+    statusDiv.textContent = message;
+    statusDiv.className = 'auth-status disconnected';
 
-        authButton.textContent = 'Detect Current Org';
-        loginButton.style.display = 'inline-block';
-        contentDiv.style.display = 'none';
+    authButton.textContent = 'Detect Current Org';
+    loginButton.style.display = 'inline-block';
+    contentDiv.style.display = 'none';
+    
+    // Hide loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'none';
     }
+}
 
-    function showLoadingUI(message = 'Connecting...') {
-        statusDiv.textContent = message;
-        statusDiv.className = 'auth-status loading';
-        authButton.disabled = true;
-        loginButton.disabled = true;
-    }
+function showLoadingUI(message = 'Connecting...') {
+    statusDiv.textContent = message;
+    statusDiv.className = 'auth-status loading';
+    authButton.disabled = true;
+    loginButton.disabled = true;
+}
 
-    function hideLoadingUI() {
-        authButton.disabled = false;
-        loginButton.disabled = false;
-    }
+function hideLoadingUI() {
+    authButton.disabled = false;
+    loginButton.disabled = false;
+}
 
-    function showError(message) {
-        showToast('Error', message, 'error');
-    }
+function showError(message) {
+    showToast('Error', message, 'error');
+}
 
     // -------------------------
     // AUTH FLOW
