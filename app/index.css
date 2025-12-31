@@ -270,8 +270,62 @@ h1 {
     border-bottom: 3px solid #667eea;
 }
 
-#membersTitle {
-    border-bottom-color: #764ba2;
+.preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #667eea;
+}
+
+.preview-header h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #667eea;
+}
+
+.pane-header h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.copy-button, .select-all-button {
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4a5568;
+    transition: all 0.2s;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.copy-button:hover, .select-all-button:hover {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
 }
 
 .members-search-input {
@@ -667,6 +721,36 @@ body.dark-theme .refresh-button {
 
 body.dark-theme .theme-toggle:hover,
 body.dark-theme .refresh-button:hover {
+    background: #8b9aee;
+    border-color: #8b9aee;
+    color: white;
+}
+
+body.dark-theme .preview-header {
+    border-bottom-color: #30363d;
+}
+
+body.dark-theme .preview-header h3 {
+    color: #e1e4e8;
+}
+
+body.dark-theme .pane-header {
+    border-bottom-color: #30363d;
+}
+
+body.dark-theme .pane-header h3 {
+    color: #e1e4e8;
+}
+
+body.dark-theme .copy-button,
+body.dark-theme .select-all-button {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #e1e4e8;
+}
+
+body.dark-theme .copy-button:hover,
+body.dark-theme .select-all-button:hover {
     background: #8b9aee;
     border-color: #8b9aee;
     color: white;

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const membersSearchInput = document.getElementById('membersSearchInput');
     const clearAllBtn = document.getElementById('clearAllBtn');
     const themeToggle = document.getElementById('themeToggle');
+    const copyPreviewBtn = document.getElementById('copyPreviewBtn');
 
     // -------------------------
     // THEME MANAGEMENT
@@ -43,6 +44,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     initTheme();
+
+    // -------------------------
+    // COPY TO CLIPBOARD
+    // -------------------------
+    copyPreviewBtn?.addEventListener('click', async () => {
+        const previewText = packagePreview.textContent;
+        try {
+            await navigator.clipboard.writeText(previewText);
+            const originalText = copyPreviewBtn.innerHTML;
+            copyPreviewBtn.innerHTML = '✓';
+            setTimeout(() => {
+                copyPreviewBtn.innerHTML = originalText;
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    });
 
     // -------------------------
     // UI STATE HELPERS
@@ -94,12 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showError(message) {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.textContent = message;
-
-        document.body.prepend(errorDiv);
-        setTimeout(() => errorDiv.remove(), 4000);
+        showToast('Error', message, 'error');
     }
 
     // -------------------------
@@ -138,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showUnauthenticatedUI(errorMsg);
                 
                 if (message.org?.error) {
-                    showError(message.org.error);
+                    showToast('Connection Failed', message.org.error, 'error');
                 }
             }
         }
@@ -549,6 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response?.success) throw new Error('Generation failed');
             downloadFile('package.xml', response.packageXml);
+            showToast('Success', 'Package.xml generated and downloaded!', 'success');
         } catch (err) {
             showError(err.message);
         }
