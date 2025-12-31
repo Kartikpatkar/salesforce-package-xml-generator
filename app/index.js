@@ -16,6 +16,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const packagePreview = document.getElementById('packagePreview');
     const membersSearchInput = document.getElementById('membersSearchInput');
     const clearAllBtn = document.getElementById('clearAllBtn');
+    const themeToggle = document.getElementById('themeToggle');
+
+    // -------------------------
+    // THEME MANAGEMENT
+    // -------------------------
+    function initTheme() {
+        chrome.storage.sync.get(['theme'], (result) => {
+            const theme = result.theme || 'light';
+            if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+                document.querySelector('.sun-icon').style.display = 'none';
+                document.querySelector('.moon-icon').style.display = 'block';
+            }
+        });
+    }
+
+    themeToggle?.addEventListener('click', () => {
+        document.body.classList.toggle('dark-theme');
+        const isDark = document.body.classList.contains('dark-theme');
+        
+        document.querySelector('.sun-icon').style.display = isDark ? 'none' : 'block';
+        document.querySelector('.moon-icon').style.display = isDark ? 'block' : 'none';
+        
+        chrome.storage.sync.set({ theme: isDark ? 'dark' : 'light' });
+    });
+
+    initTheme();
 
     // -------------------------
     // UI STATE HELPERS
