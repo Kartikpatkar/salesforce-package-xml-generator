@@ -22,6 +22,13 @@ class SalesforceAuth {
             const storage = await chrome.storage.local.get(['openerTabId']);
             const openerTabId = storage.openerTabId;
             
+            // If openerTabId is explicitly null, user opened from non-Salesforce tab - don't scan others
+            if (openerTabId === null) {
+                console.log('Opener tab explicitly cleared; not scanning other tabs');
+                this._cache = { org: { isAuthenticated: false }, timestamp: Date.now() };
+                return { isAuthenticated: false };
+            }
+            
             if (openerTabId) {
                 console.log('Checking opener tab ID:', openerTabId);
                 try {
@@ -29,7 +36,8 @@ class SalesforceAuth {
                     if (openerTab && openerTab.url && (
                         openerTab.url.includes('salesforce.com') ||
                         openerTab.url.includes('force.com') ||
-                        openerTab.url.includes('visual.force.com')
+                        openerTab.url.includes('visual.force.com') ||
+                        openerTab.url.includes('salesforce-setup.com')
                     )) {
                         const openerHost = new URL(openerTab.url).hostname;
                         if (this._isLoginOrTestHost(openerHost)) {
@@ -50,7 +58,38 @@ class SalesforceAuth {
             }
             
             // If we reached here, opener tab did not yield an authenticated session.
-            console.log('No authenticated org found in opener tab; skipping scan of other tabs by request');
+            // Scan other Salesforce tabs to find an authenticated session
+            console.log('No authenticated org found in opener tab; scanning other Salesforce tabs...');
+            const tabs = await chrome.tabs.query({});
+            const salesforceTabs = tabs.filter(tab => 
+                tab.url && (
+                    tab.url.includes('salesforce.com') ||
+                    tab.url.includes('force.com') ||
+                    tab.url.includes('visual.force.com') ||
+                    tab.url.includes('salesforce-setup.com')
+                ) && !tab.url.startsWith('chrome-extension://')
+            );
+            
+            // Sort by last accessed time (most recent first)
+            salesforceTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            
+            for (const tab of salesforceTabs) {
+                const tabHost = new URL(tab.url).hostname;
+                if (this._isLoginOrTestHost(tabHost)) {
+                    console.log('Skipping login/test tab:', tabHost);
+                    continue;
+                }
+                const result = await this._checkTabForSession(tab);
+                if (result.isAuthenticated) {
+                    console.log('Found authenticated session in tab:', result.instanceUrl);
+                    // Update the opener tab ID to this authenticated tab
+                    chrome.storage.local.set({ openerTabId: tab.id });
+                    this._cache = { org: result, timestamp: Date.now() };
+                    return result;
+                }
+            }
+            
+            // No authenticated org found in any Salesforce tab
             this._cache = { org: { isAuthenticated: false }, timestamp: Date.now() };
             return { isAuthenticated: false };
         } catch (error) {
@@ -277,11 +316,22 @@ class SalesforceAuth {
                         try {
                             const url = new URL(updatedTab.url);
                             const isSalesforceUrl = url.hostname.endsWith('salesforce.com') ||
-                                url.hostname.endsWith('force.com');
+                                url.hostname.endsWith('force.com') ||
+                                url.hostname.endsWith('salesforce-setup.com');
 
-                            if (isSalesforceUrl &&
-                                (url.pathname.includes('/secur/') ||
-                                    url.pathname.includes('/lightning/setup/'))) {
+                            // Skip if still on login page
+                            if (url.hostname === 'login.salesforce.com' || url.hostname === 'test.salesforce.com') {
+                                return; // Still logging in
+                            }
+
+                            if (isSalesforceUrl) {
+                                // User has been redirected to Salesforce org after login
+                                console.log('Login redirect detected to:', url.hostname);
+
+                                // Update opener tab ID to this new login tab and clear cache
+                                await chrome.storage.local.set({ openerTabId: tabId });
+                                this.clearCache(); // Clear cache so getCurrentOrg() doesn't use old result
+                                console.log('Updated opener tab ID and cleared cache:', tabId);
 
                                 // Give it a moment for the session to be established
                                 setTimeout(async () => {

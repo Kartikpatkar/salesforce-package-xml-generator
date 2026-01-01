@@ -169,7 +169,19 @@ function showError(message) {
         }
     });
 
-    authButton?.addEventListener('click', requestAuthCheck);
+    authButton?.addEventListener('click', () => {
+        // If already authenticated, clear the current org and re-detect
+        if (authButton.textContent === 'Switch Org') {
+            console.log('[APP] Switching org - clearing current session');
+            chrome.storage.local.set({ openerTabId: null, currentOrg: null }, () => {
+                chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_CACHE' }, () => {
+                    requestAuthCheck();
+                });
+            });
+        } else {
+            requestAuthCheck();
+        }
+    });
 
     loginButton?.addEventListener('click', () => showLoginModal());
 
@@ -200,8 +212,15 @@ function showError(message) {
                 useSandbox
             });
             
-            // Hide loading after 30 seconds if no response
+            // After login, automatically check auth every 2 seconds for 30 seconds
+            const loginCheckInterval = setInterval(() => {
+                console.log('[APP] Checking auth after login...');
+                chrome.runtime.sendMessage({ type: 'CHECK_AUTH' });
+            }, 2000);
+            
+            // Stop checking after 30 seconds
             setTimeout(() => {
+                clearInterval(loginCheckInterval);
                 if (statusDiv.className === 'auth-status loading') {
                     hideLoadingUI();
                     showUnauthenticatedUI('Login timeout - please try again');
@@ -629,14 +648,15 @@ function showError(message) {
     // -------------------------
     // INITIAL LOAD
     // -------------------------
-    // Find the most recent Salesforce tab and update opener tab ID
-    chrome.tabs.query({}, (allTabs) => {
-        // Filter for Salesforce tabs
+    // Check tabs in the current window only
+    chrome.tabs.query({ currentWindow: true }, (allTabs) => {
+        // Filter for Salesforce tabs in current window
         const salesforceTabs = allTabs.filter(tab => 
             tab.url && (
                 tab.url.includes('salesforce.com') ||
                 tab.url.includes('force.com') ||
-                tab.url.includes('visual.force.com')
+                tab.url.includes('visual.force.com') ||
+                tab.url.includes('salesforce-setup.com')
             ) && !tab.url.startsWith('chrome-extension://')
         );
         
@@ -644,18 +664,36 @@ function showError(message) {
             // Sort by last accessed time (most recent first)
             salesforceTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
             const mostRecentSfTab = salesforceTabs[0];
+            const now = Date.now();
+            const lastAccessedTime = mostRecentSfTab.lastAccessed || 0;
             
-            chrome.storage.local.set({ openerTabId: mostRecentSfTab.id }, () => {
-                console.log('[APP] Updated opener tab ID to most recent Salesforce tab:', mostRecentSfTab.id, mostRecentSfTab.url);
-                // Clear the auth cache to force re-detection
+            // Only connect if the Salesforce tab was accessed within the last 30 seconds
+            // This prevents connecting to old Salesforce tabs when user is on a non-Salesforce tab
+            if (now - lastAccessedTime < 30000) {
+                chrome.storage.local.set({ openerTabId: mostRecentSfTab.id }, () => {
+                    console.log('[APP] Updated opener tab ID to recent Salesforce tab:', mostRecentSfTab.id, mostRecentSfTab.url);
+                    // Clear the auth cache to force re-detection
+                    chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_CACHE' }, () => {
+                        requestAuthCheck();
+                    });
+                });
+            } else {
+                // Salesforce tab exists but is old, user probably switched away from it
+                console.log('[APP] Salesforce tab found but is stale (', (now - lastAccessedTime), 'ms old), clearing org');
+                chrome.storage.local.set({ openerTabId: null }, () => {
+                    chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_CACHE' }, () => {
+                        requestAuthCheck();
+                    });
+                });
+            }
+        } else {
+            // No Salesforce tabs in current window, clear any stored org and force login
+            console.log('[APP] No Salesforce tabs in current window, clearing stored org');
+            chrome.storage.local.set({ openerTabId: null }, () => {
                 chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_CACHE' }, () => {
                     requestAuthCheck();
                 });
             });
-        } else {
-            // No Salesforce tabs found, just do auth check
-            console.log('[APP] No Salesforce tabs found');
-            requestAuthCheck();
         }
     });
 });

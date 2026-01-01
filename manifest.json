@@ -8,11 +8,7 @@
     "cookies",
     "storage",
     "activeTab",
-    "scripting",
-    "https://*.salesforce.com/*",
-    "https://*.force.com/*",
-    "https://*.visual.force.com/*",
-    "https://*.my.salesforce.com/*"
+    "scripting"
   ],
   "host_permissions": [
     "https://*.salesforce.com/*",
@@ -20,7 +16,9 @@
     "https://*.visual.force.com/*",
     "https://*.my.salesforce.com/*",
     "https://login.salesforce.com/*",
-    "https://test.salesforce.com/*"
+    "https://test.salesforce.com/*",
+    "https://*.salesforce-setup.com/*",
+    "https://*.my.salesforce-setup.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
@@ -45,7 +43,11 @@
         "https://*.salesforce.com/*",
         "https://*.force.com/*",
         "https://*.visual.force.com/*",
-        "https://*.my.salesforce.com/*"
+        "https://*.my.salesforce.com/*",
+        "https://login.salesforce.com/*",
+        "https://test.salesforce.com/*",
+        "https://*.salesforce-setup.com/*",
+        "https://*.my.salesforce-setup.com/*"
       ],
       "js": [
         "content/content-script.js"
