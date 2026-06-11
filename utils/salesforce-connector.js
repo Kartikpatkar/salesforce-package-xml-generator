@@ -346,11 +346,26 @@ class SalesforceConnector {
                 // Validate session via API
                 const validation = await this._validateSessionViaApi(apiBase, cookie.value, tab.id);
                 if (validation?.success) {
+                    // Augment with org info if available via content script
+                    let orgInfo = {};
+                    try {
+                        const injected = await this._ensureContentScript(tab.id);
+                        if (injected) {
+                            const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_ORG_INFO' });
+                            orgInfo = response || {};
+                        }
+                    } catch (e) {
+                        console.log('[SalesforceConnector] Could not get org info from tab:', e.message);
+                    }
+
                     return {
                         isAuthenticated: true,
                         instanceUrl: apiBase,
                         sessionId: cookie.value,
                         isSandbox,
+                        orgId: orgInfo.orgId,
+                        userId: orgInfo.userId,
+                        username: orgInfo.username,
                         tabId: tab.id
                     };
                 }
@@ -363,6 +378,31 @@ class SalesforceConnector {
         } catch (err) {
             console.log('[SalesforceConnector] Error checking tab:', err);
             return { isAuthenticated: false };
+        }
+    }
+
+    /**
+     * Ensure content script is injected in the tab
+     * @private
+     */
+    async _ensureContentScript(tabId) {
+        try {
+            await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+            return true;
+        } catch (err) {
+            if (err?.message?.includes('Receiving end')) {
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId },
+                        files: [this._contentScriptPath]
+                    });
+                    return true;
+                } catch (injectErr) {
+                    console.log('[SalesforceConnector] Failed to inject content script:', injectErr.message);
+                    return false;
+                }
+            }
+            return false;
         }
     }
 

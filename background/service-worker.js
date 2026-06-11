@@ -1,14 +1,15 @@
 // background/service-worker.js
 // v8 - Added sendResponse parameter to listener - 2025-12-31
-import SalesforceAuth from '../utils/auth.js';
+import SalesforceConnector from '../utils/salesforce-connector.js';
 import SalesforceMembers from '../utils/salesforce-members.js';
 
-const membersClient = new SalesforceMembers({ apiVersion: '56.0' });
+const connector = new SalesforceConnector();
+const membersClient = new SalesforceMembers({ apiVersion: '56.0', connector });
 console.log('Service worker registered - v8 loaded');
 
 async function checkAuthAndNotify() {
   try {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
 
     console.log(
       'Auth check result:',
@@ -118,7 +119,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           console.log('Starting login flow, sandbox:', message.useSandbox);
-          const org = await SalesforceAuth.login(message.useSandbox);
+          const org = await connector.login(message.useSandbox);
           console.log('Login successful:', org);
           
           // Store the org info
@@ -140,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     case 'CLEAR_AUTH_CACHE':
-      SalesforceAuth.clearCache();
+      connector.clearCache();
       sendResponse({ success: true });
       break;
 
@@ -202,7 +203,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Fetch all available API versions from the org via REST
 async function fetchAvailableApiVersions() {
   try {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
     if (!org?.isAuthenticated) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -254,7 +255,7 @@ async function fetchAvailableApiVersions() {
 async function fetchAvailableMetadataTypes() {
   try {
     console.log('[SW] fetchAvailableMetadataTypes called');
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
     console.log('[SW] fetchAvailableMetadataTypes - org:', {
       isAuthenticated: org?.isAuthenticated,
       hasSessionId: !!org?.sessionId,
@@ -382,7 +383,7 @@ async function handleContentScriptLoaded(message, sender) {
 
   // Delay slightly to allow cookies/session to settle
   setTimeout(async () => {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
 
     chrome.runtime.sendMessage({
       type: 'AUTH_STATE_CHANGED',
@@ -403,7 +404,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       tab.url?.includes('visual.force.com'))) {
     console.log('Tab updated, checking auth status...');
     try {
-      const org = await SalesforceAuth.getCurrentOrg();
+      const org = await connector.checkAuth();
       console.log('Auth status after tab update:', org.isAuthenticated ? 'Authenticated' : 'Not authenticated');
 
       // Send message to all extension views
