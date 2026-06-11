@@ -1,11 +1,15 @@
 // background/service-worker.js
 // v8 - Added sendResponse parameter to listener - 2025-12-31
-import SalesforceAuth from '../utils/auth.js';
+import SalesforceConnector from '../utils/salesforce-connector.js';
+import SalesforceMembers from '../utils/salesforce-members.js';
+
+const connector = new SalesforceConnector();
+const membersClient = new SalesforceMembers({ apiVersion: '56.0', connector });
 console.log('Service worker registered - v8 loaded');
 
 async function checkAuthAndNotify() {
   try {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
 
     console.log(
       'Auth check result:',
@@ -32,7 +36,7 @@ async function checkAuthAndNotify() {
 }
 
 // Initialize connection
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.log('Service worker installed');
   // Set default settings
   chrome.storage.sync.set({
@@ -44,6 +48,15 @@ chrome.runtime.onInstalled.addListener(() => {
       'CustomMetadata', 'CustomLabel'
     ]
   });
+
+  if (details.reason === 'install') {
+    console.log('Extension installed - opening options page');
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('app/index.html')
+    });
+  } else if (details.reason === 'update') {
+    console.log('Extension updated');
+  }
 });
 
 // Keep the service worker alive
@@ -106,7 +119,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           console.log('Starting login flow, sandbox:', message.useSandbox);
-          const org = await SalesforceAuth.login(message.useSandbox);
+          const org = await connector.login(message.useSandbox);
           console.log('Login successful:', org);
           
           // Store the org info
@@ -128,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     case 'CLEAR_AUTH_CACHE':
-      SalesforceAuth.clearCache();
+      connector.clearCache();
       sendResponse({ success: true });
       break;
 
@@ -143,13 +156,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'GET_METADATA_MEMBERS':
       (async () => {
         try {
-          let result;
-          if (isToolingType(message.metadataType)) {
-            result = await fetchMembersViaToolingAPI(message.metadataType);
-          } else {
-            result = await fetchMetadataMembersViaMetadataAPI(message.metadataType);
-          }
-          sendResponse(result);
+          const members = await membersClient.getMembers(message.metadataType);
+          sendResponse({ success: true, members });
         } catch (err) {
           sendResponse({ success: false, error: err.message });
         }
@@ -189,62 +197,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function fetchMembersViaToolingAPI(metadataType) {
-  try {
-    const org = await SalesforceAuth.getCurrentOrg();
-    if (!org.isAuthenticated) {
-      return { success: false, error: 'Not authenticated' };
-    }
 
-    // Only these metadata types should use the Tooling API
-    const objectMap = {
-      ApexClass: 'ApexClass',
-      ApexTrigger: 'ApexTrigger',
-      ApexComponent: 'ApexComponent',
-      ApexPage: 'ApexPage'
-    };
-    
-    // CustomLabel and other metadata types should use the Metadata API
-    if (metadataType === 'CustomLabel') {
-      return { success: false, error: 'Use Metadata API' };
-    }
-
-    const toolingObject = objectMap[metadataType];
-    if (!toolingObject) {
-      return { success: false, error: 'Unsupported tooling type' };
-    }
-
-    const query = `SELECT Name FROM ${toolingObject} ORDER BY Name`;
-    const url =
-      `${org.instanceUrl}/services/data/v56.0/tooling/query/?q=` +
-      encodeURIComponent(query);
-
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${org.sessionId}`
-      }
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    return {
-      success: true,
-      members: data.records.map(r => r.Name)
-    };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
 
 
 // Fetch all available API versions from the org via REST
 async function fetchAvailableApiVersions() {
   try {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
     if (!org?.isAuthenticated) {
       return { success: false, error: 'Not authenticated' };
     }
@@ -296,7 +255,7 @@ async function fetchAvailableApiVersions() {
 async function fetchAvailableMetadataTypes() {
   try {
     console.log('[SW] fetchAvailableMetadataTypes called');
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
     console.log('[SW] fetchAvailableMetadataTypes - org:', {
       isAuthenticated: org?.isAuthenticated,
       hasSessionId: !!org?.sessionId,
@@ -407,88 +366,7 @@ async function fetchAvailableMetadataTypes() {
   }
 }
 
-// Helper: call Metadata API listMetadata (SOAP) and return array of fullNames
-async function fetchMetadataMembersViaMetadataAPI(metadataType) {
-  try {
-    const org = await SalesforceAuth.getCurrentOrg();
-    console.log('[SW] fetchMetadataMembersViaMetadataAPI - org object:', {
-      isAuthenticated: org?.isAuthenticated,
-      hasSessionId: !!org?.sessionId,
-      hasInstanceUrl: !!org?.instanceUrl,
-      instanceUrl: org?.instanceUrl,
-      keys: Object.keys(org || {})
-    });
-    
-    if (!org?.isAuthenticated) {
-      return { success: false, error: 'Not authenticated' };
-    }
-    
-    if (!org?.sessionId || !org?.instanceUrl) {
-      console.error('[SW] Missing sessionId or instanceUrl:', { sessionId: org?.sessionId, instanceUrl: org?.instanceUrl });
-      return { success: false, error: 'Missing session info - please re-authenticate' };
-    }
 
-    // build SOAP body for listMetadata
-    const body = `
-            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                              xmlns:met="http://soap.sforce.com/2006/04/metadata">
-              <soapenv:Header>
-                <met:SessionHeader>
-                  <met:sessionId>${org.sessionId}</met:sessionId>
-                </met:SessionHeader>
-              </soapenv:Header>
-              <soapenv:Body>
-                <met:listMetadata>
-                  <met:queries>
-                    <met:type>${metadataType}</met:type>
-                  </met:queries>
-                  <met:asOfVersion>56.0</met:asOfVersion>
-                </met:listMetadata>
-              </soapenv:Body>
-            </soapenv:Envelope>
-        `;
-
-    console.log('[SW] Fetching metadata members for:', metadataType, 'from:', org.instanceUrl);
-    
-    const res = await fetch(`${org.instanceUrl}/services/Soap/m/56.0`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/xml',
-        'SOAPAction': 'listMetadata'
-      },
-      body
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('[SW] listMetadata HTTP error:', res.status, res.statusText);
-      console.error('[SW] listMetadata response text:', text.slice(0, 1000));
-      throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`);
-    }
-
-    const text = await res.text();
-
-    // Parse XML response to extract fullName values using regex
-    // Format: <fullName>ComponentName</fullName>
-    const fullNameRegex = /<fullName>([^<]+)<\/fullName>/g;
-    const members = [];
-    let match;
-    while ((match = fullNameRegex.exec(text)) !== null) {
-      const name = match[1].trim();
-      if (name && !members.includes(name)) {
-        members.push(name);
-      }
-    }
-
-    console.log('[SW] Found', members.length, 'members for', metadataType);
-    console.log('[SW] Sample members:', members.slice(0, 5));
-    return { success: true, members };
-  } catch (err) {
-    console.error('[SW] fetchMetadataMembersViaMetadataAPI error:', err.message);
-    console.error('[SW] Full error:', err);
-    return { success: false, error: err.message };
-  }
-}
 
 async function handleContentScriptLoaded(message, sender) {
   const url = message.url || sender?.tab?.url;
@@ -505,7 +383,7 @@ async function handleContentScriptLoaded(message, sender) {
 
   // Delay slightly to allow cookies/session to settle
   setTimeout(async () => {
-    const org = await SalesforceAuth.getCurrentOrg();
+    const org = await connector.checkAuth();
 
     chrome.runtime.sendMessage({
       type: 'AUTH_STATE_CHANGED',
@@ -526,7 +404,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       tab.url?.includes('visual.force.com'))) {
     console.log('Tab updated, checking auth status...');
     try {
-      const org = await SalesforceAuth.getCurrentOrg();
+      const org = await connector.checkAuth();
       console.log('Auth status after tab update:', org.isAuthenticated ? 'Authenticated' : 'Not authenticated');
 
       // Send message to all extension views
@@ -540,33 +418,4 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-// Listen for installation or update
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    console.log('Extension installed');
-    // Open the app page on install
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('app/index.html')
-    });
-  } else if (details.reason === 'update') {
-    console.log('Extension updated');
-  }
-});
 
-function isToolingType(type) {
-  // Metadata types that work better with Tooling API
-  return [
-    'ApexClass',
-    'ApexTrigger',
-    'ApexComponent',
-    'ApexPage',
-    'LightningComponentBundle',
-    'AuraDefinitionBundle',
-    'FlowDefinition',
-    'Flow',
-    'StaticResource',
-    'EmailTemplate',
-    'Report',
-    'Dashboard'
-  ].includes(type);
-}
