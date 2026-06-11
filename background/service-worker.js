@@ -32,7 +32,7 @@ async function checkAuthAndNotify() {
 }
 
 // Initialize connection
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.log('Service worker installed');
   // Set default settings
   chrome.storage.sync.set({
@@ -44,6 +44,15 @@ chrome.runtime.onInstalled.addListener(() => {
       'CustomMetadata', 'CustomLabel'
     ]
   });
+
+  if (details.reason === 'install') {
+    console.log('Extension installed - opening options page');
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('app/index.html')
+    });
+  } else if (details.reason === 'update') {
+    console.log('Extension updated');
+  }
 });
 
 // Keep the service worker alive
@@ -201,7 +210,9 @@ async function fetchMembersViaToolingAPI(metadataType) {
       ApexClass: 'ApexClass',
       ApexTrigger: 'ApexTrigger',
       ApexComponent: 'ApexComponent',
-      ApexPage: 'ApexPage'
+      ApexPage: 'ApexPage',
+      LightningComponentBundle: 'LightningComponentBundle',
+      AuraDefinitionBundle: 'AuraDefinitionBundle'
     };
     
     // CustomLabel and other metadata types should use the Metadata API
@@ -540,18 +551,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-// Listen for installation or update
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    console.log('Extension installed');
-    // Open the app page on install
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('app/index.html')
-    });
-  } else if (details.reason === 'update') {
-    console.log('Extension updated');
-  }
-});
+
 
 function isToolingType(type) {
   // Only Apex and Lightning component types are reliably supported via Tooling API

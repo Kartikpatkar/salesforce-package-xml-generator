@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearAllBtn = document.getElementById('clearAllBtn');
     const themeToggle = document.getElementById('themeToggle');
     const copyPreviewBtn = document.getElementById('copyPreviewBtn');
+    let loginCheckInterval = null;
+    let loginCheckTimeout = null;
 
     // -------------------------
     // THEME MANAGEMENT
@@ -152,6 +154,14 @@ function showError(message) {
             
             if (message.org?.isAuthenticated) {
                 console.log('[APP] Authenticated, showing UI');
+                if (loginCheckInterval) {
+                    clearInterval(loginCheckInterval);
+                    loginCheckInterval = null;
+                }
+                if (loginCheckTimeout) {
+                    clearTimeout(loginCheckTimeout);
+                    loginCheckTimeout = null;
+                }
                 showAuthenticatedUI(message.org);
                 fetchMetadataTypes(); // Fetch dynamic metadata types on successful auth
                 fetchApiVersions(); // Fetch dynamic API versions on successful auth
@@ -212,15 +222,22 @@ function showError(message) {
                 useSandbox
             });
             
+            if (loginCheckInterval) clearInterval(loginCheckInterval);
+            if (loginCheckTimeout) clearTimeout(loginCheckTimeout);
+
             // After login, automatically check auth every 2 seconds for 30 seconds
-            const loginCheckInterval = setInterval(() => {
+            loginCheckInterval = setInterval(() => {
                 console.log('[APP] Checking auth after login...');
                 chrome.runtime.sendMessage({ type: 'CHECK_AUTH' });
             }, 2000);
             
             // Stop checking after 30 seconds
-            setTimeout(() => {
-                clearInterval(loginCheckInterval);
+            loginCheckTimeout = setTimeout(() => {
+                if (loginCheckInterval) {
+                    clearInterval(loginCheckInterval);
+                    loginCheckInterval = null;
+                }
+                loginCheckTimeout = null;
                 if (statusDiv.className === 'auth-status loading') {
                     hideLoadingUI();
                     showUnauthenticatedUI('Login timeout - please try again');
