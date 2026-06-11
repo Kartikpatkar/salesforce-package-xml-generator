@@ -41,8 +41,10 @@
     color: #475569;
 }
 
-.footer-info-row i {
+.footer-info-row svg,
+.footer-link svg {
     margin-right: 5px;
+    vertical-align: middle;
 }
 
 .footer-links {
@@ -55,10 +57,6 @@
 
 .footer-link {
     font-size: 0.85rem;
-}
-
-.footer-link i {
-    margin-right: 5px;
 }
 
 .footer-divider {

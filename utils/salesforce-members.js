@@ -53,12 +53,23 @@ class SalesforceMembers {
 
         const org = await this._requireAuth();
 
+        // Retrieve apiVersion from sync storage, fallback to default
+        let version = this.apiVersion;
+        try {
+            const syncData = await chrome.storage.sync.get(['apiVersion']);
+            if (syncData.apiVersion) {
+                version = syncData.apiVersion;
+            }
+        } catch (e) {
+            console.warn('[SalesforceMembers] Error fetching apiVersion from sync storage, using default:', e.message);
+        }
+
         if (this.isToolingType(metadataType)) {
-            console.log(`[SalesforceMembers] Fetching ${metadataType} via Tooling API`);
-            return this._fetchViaToolingAPI(org, metadataType);
+            console.log(`[SalesforceMembers] Fetching ${metadataType} via Tooling API (v${version})`);
+            return this._fetchViaToolingAPI(org, metadataType, version);
         } else {
-            console.log(`[SalesforceMembers] Fetching ${metadataType} via Metadata API`);
-            return this._fetchViaMetadataAPI(org, metadataType);
+            console.log(`[SalesforceMembers] Fetching ${metadataType} via Metadata API (v${version})`);
+            return this._fetchViaMetadataAPI(org, metadataType, version);
         }
     }
 
@@ -101,7 +112,7 @@ class SalesforceMembers {
      * Fetch members via Tooling API
      * @private
      */
-    async _fetchViaToolingAPI(org, metadataType) {
+    async _fetchViaToolingAPI(org, metadataType, version) {
         // Map metadata type to Tooling object
         const toolingObjectMap = {
             ApexClass: 'ApexClass',
@@ -118,7 +129,7 @@ class SalesforceMembers {
         }
 
         const query = `SELECT Name FROM ${toolingObject} ORDER BY Name`;
-        const url = `${org.instanceUrl}/services/data/v${this.apiVersion}/tooling/query/?q=${encodeURIComponent(query)}`;
+        const url = `${org.instanceUrl}/services/data/v${version}/tooling/query/?q=${encodeURIComponent(query)}`;
 
         const res = await fetch(url, {
             headers: {
@@ -140,7 +151,7 @@ class SalesforceMembers {
      * Fetch members via Metadata API (SOAP listMetadata)
      * @private
      */
-    async _fetchViaMetadataAPI(org, metadataType) {
+    async _fetchViaMetadataAPI(org, metadataType, version) {
         // Build SOAP envelope for listMetadata
         const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -155,12 +166,12 @@ class SalesforceMembers {
       <met:queries>
         <met:type>${metadataType}</met:type>
       </met:queries>
-      <met:asOfVersion>${this.apiVersion}</met:asOfVersion>
+      <met:asOfVersion>${version}</met:asOfVersion>
     </met:listMetadata>
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-        const url = `${org.instanceUrl}/services/Soap/m/${this.apiVersion}`;
+        const url = `${org.instanceUrl}/services/Soap/m/${version}`;
         
         const res = await fetch(url, {
             method: 'POST',
