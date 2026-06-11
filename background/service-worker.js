@@ -554,19 +554,14 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 function isToolingType(type) {
-  // Metadata types that work better with Tooling API
+  // Only Apex and Lightning component types are reliably supported via Tooling API
+  // All other metadata types should use Metadata API listMetadata
   return [
     'ApexClass',
     'ApexTrigger',
     'ApexComponent',
     'ApexPage',
     'LightningComponentBundle',
-    'AuraDefinitionBundle',
-    'FlowDefinition',
-    'Flow',
-    'StaticResource',
-    'EmailTemplate',
-    'Report',
-    'Dashboard'
+    'AuraDefinitionBundle'
   ].includes(type);
 }
